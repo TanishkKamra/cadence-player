@@ -228,7 +228,7 @@ function gridView(cat, title, items, opts) {
   const viewBtn = h('button', { class: 'tb-btn', title: asList ? 'Grid view' : 'List view', onclick: () => { set.grid[cat] = asList; saveSettings(); render('swap'); } }, icon(asList ? 'grid' : 'lyrics'));
   const v = h('section', { class: 'view' }, viewHead({ cat, title, sub: plural(items.length, 'item') }),
     toolbar(() => items.flatMap(i => i.tracks), { label: title, view: { name: cat } }, { onFilter: draw, extra: [h('span', { class: 'tb-spacer' }), ...(opts.extra || []), viewBtn] }), scroll);
-  if (opts.az && items.length > 20) v.append(azRail(l => scroll.querySelector(`[data-letter="${l}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
+  if (opts.az && items.length > 20) v.append(azRail((l, drag) => scroll.querySelector(`[data-letter="${l}"]`)?.scrollIntoView({ block: 'start', behavior: drag ? 'auto' : 'smooth' }),
     new Set(items.map(i => letterOf(i.name)))));
   return v;
 }

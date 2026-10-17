@@ -393,9 +393,33 @@ export function refreshLists() { document.querySelectorAll('.vlist').forEach(v =
 
 export const letterOf = s => { const c = norm(s).trim()[0] || '#'; return /[a-z]/.test(c) ? c.toUpperCase() : /[0-9]/.test(c) ? '0' : '#'; };
 export function azRail(onPick, has) { // has: optional Set of letters with items; others render disabled
-  return h('div', { class: 'az', 'aria-label': 'Jump to letter' }, ...['0', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'].map(l => has && !has.has(l)
+  const btns = ['0', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'].map(l => has && !has.has(l)
     ? h('button', { class: 'empty', 'aria-disabled': 'true', tabindex: '-1' }, l)
-    : h('button', { onclick: () => onPick(l) }, l)));
+    : h('button', { onclick: e => { if (!e.detail) onPick(l); } }, l)); // pointer picks happen on press/drag below; keyboard Enter/Space still clicks
+  const rail = h('div', { class: 'az', 'aria-label': 'Jump to letter' }, ...btns);
+  // press and drag along the rail: the nearest letter under the pointer is picked as it changes
+  let cur = null;
+  const pickAt = y => {
+    let best = null, d = Infinity;
+    for (const b of btns) {
+      if (b.classList.contains('empty')) continue;
+      const r = b.getBoundingClientRect(), dd = Math.abs(y - (r.top + r.height / 2));
+      if (dd < d) { d = dd; best = b; }
+    }
+    if (best && best !== cur) { cur?.classList.remove('on'); cur = best; cur.classList.add('on'); onPick(best.textContent, true); }
+  };
+  const end = () => { rail.classList.remove('scrub'); cur?.classList.remove('on'); cur = null; };
+  rail.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return; // primary button (the OS already maps swapped mouse buttons), pen or touch
+    e.preventDefault();
+    rail.setPointerCapture(e.pointerId);
+    rail.classList.add('scrub');
+    pickAt(e.clientY);
+  });
+  rail.addEventListener('pointermove', e => { if (rail.hasPointerCapture(e.pointerId)) pickAt(e.clientY); });
+  rail.addEventListener('pointerup', end);
+  rail.addEventListener('pointercancel', end);
+  return rail;
 }
 
 // ---------- card grid / category list ----------

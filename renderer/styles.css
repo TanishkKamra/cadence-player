@@ -1280,3 +1280,11 @@ body[data-theme="light"] :is(.np-art, .npv-art, .view-head .art) { box-shadow: i
 body[data-theme="light"] .eq-curve { box-shadow: inset 0 2px 10px rgb(40 30 20 / .12), inset 0 0 0 1px var(--hair), 0 0 0 6px var(--shell), 0 0 0 7px rgb(var(--accent) / .1); }
 .knob .dial { border-radius: 50%; box-shadow: 0 12px 24px -12px rgb(0 0 0 / .8), 0 0 0 5px rgb(255 255 255 / .02); }
 .toggle-btn.on::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; vertical-align: 1px; background: rgb(var(--accent)); box-shadow: 0 0 8px rgb(var(--accent)); }
+
+/* A–Z rail: press and drag to scrub; the letter under the pointer swells on the house spring */
+.az { touch-action: none; border-radius: 999px; transition: background-color var(--t-med) ease-out, box-shadow var(--t-med) ease-out; }
+.az.scrub { cursor: grabbing; background: rgb(255 255 255 / .06); box-shadow: inset 0 0 0 1px var(--hair); }
+body[data-theme="light"] .az.scrub { background: rgb(255 255 255 / .7); }
+.az button { transition: transform var(--spring-snappy-dur, .35s) var(--spring-snappy, var(--ease-out)), color var(--t-fast) ease-out; }
+.az.scrub button:hover { background: none; }
+.az button.on { color: rgb(var(--accent)); transform: scale(1.5); }
