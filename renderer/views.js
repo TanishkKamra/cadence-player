@@ -41,7 +41,8 @@ export const catIcon = (id, size) => { const c = catOf(id); return h('span', { c
 // ---------- navigation ----------
 export function go(name, arg, { replace = false } = {}) {
   if (name === 'hier' && !arg && arr(S.folders).length === 1) arg = S.folders[0];
-  if (S.view && !replace && !(S.view.name === name && S.view.arg === arg)) S.nav.push(S.view);
+  if (S.view && !replace && S.view.name === name && S.view.arg === arg) return; // already here: picking it again must not reload the page
+  if (S.view && !replace) S.nav.push(S.view);
   if (S.nav.length > 60) S.nav.shift();
   S.view = { name, arg };
   render('nav');
