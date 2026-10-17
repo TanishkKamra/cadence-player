@@ -27,6 +27,30 @@ const str = v => typeof v === 'string' && v.length > 0 && v.length < 4096 && !v.
 const strs = v => Array.isArray(v) && v.length < 1e5 && v.every(str);
 const num = (v, lo, hi, d) => typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
 const under = (f, d) => { const r = path.relative(d, f); return !!r && !r.startsWith('..') && !path.isAbsolute(r); };
+// UNC/device/NT paths (\\host\share, //host, \\?\, \\.\, \??\) make Windows send NTLM credentials to the host: anything but X:\... must sit inside a library folder that is itself a share
+// long forms of a drive or share path compare as their plain form (\\?\UNC\nas\m -> \\nas\m, \\?\D:\ -> D:\); other device paths (\\?\GLOBALROOT, \\.\pipe) stay "network"
+const plainPath = f => f.replace(/^[\\/]{2}[?.][\\/]UNC[\\/]|^\\\?\?\\UNC\\/i, '\\\\').replace(/^(?:[\\/]{2}[?.]|\\\?\?)[\\/](?=[a-z]:[\\/])/i, '');
+const netPath = f => !/^[a-z]:[\\/]/i.test(f);
+const netOk = (f, folders = library.folders) => { const g = plainPath(f); return !netPath(g) || folders.some(d => netPath(d) && under(g, d)); };
+// Windows follows local-to-remote symlinks by default, so a link in a music folder could still reach another host. lstat/readlink read only the
+// link itself, never its target. Links at or above a library folder are the user's own choice; shares are approved hosts (remote links are off by default).
+const linkOk = (f, depth = 0) => {
+  if (depth > 8 || !netOk(f)) return false;
+  const g = plainPath(f);
+  if (netPath(g)) return true;
+  const parts = path.resolve(g).split(/[\\/]+/).filter(Boolean);
+  for (let i = 2; i <= parts.length; i++) {
+    const p = parts.slice(0, i).join('\\');
+    let st;
+    try { st = fs.lstatSync(p); } catch { return true; } // missing: opening it fails without following anything
+    if (!st.isSymbolicLink() || library.folders.some(d => !path.relative(d, p) || under(d, p))) continue;
+    let t;
+    try { t = fs.readlinkSync(p); } catch { return false; }
+    if (/^\\\\\?\\Volume\{/i.test(t)) continue; // a volume mounted into a folder: local
+    return linkOk(path.resolve(path.dirname(p), plainPath(t), ...parts.slice(i)), depth + 1);
+  }
+  return true;
+};
 const normFolder = f => path.resolve(/^[a-z]:$/i.test(f) ? f + '\\' : f);
 const sleepMs = ms => new Promise(r => setTimeout(r, ms));
 const sha1 = s => crypto.createHash('sha1').update(s).digest('hex');
@@ -224,6 +248,7 @@ async function walk(dir, out, extra) {
   try { ents = await fsp.readdir(dir, { withFileTypes: true }); } catch { if (extra) extra.unreadable.push(dir); return out; }
   for (const e of ents) {
     const p = path.join(dir, e.name);
+    if (e.isSymbolicLink() && !linkOk(p)) continue;
     if (e.isDirectory()) { if (!e.name.startsWith('.') && !/^(\$recycle\.bin|system volume information)$/i.test(e.name)) await walk(p, out, extra); }
     else if (TMP_TAG.test(e.name)) { if (extra && !activeTmp.has(p)) fsp.stat(p).then(st => { if (Date.now() - st.mtimeMs > 6e5) fsp.rm(p, { force: true }); }).catch(() => {}); } // leftovers of an interrupted tag edit
     else if (isAudio(e.name)) out.push(p);
@@ -297,7 +322,7 @@ function folderCover(dir) {
     try {
       const names = await fsp.readdir(dir);
       const hit = names.find(n => /^(cover|folder|front|album|artwork)\.(jpe?g|png)$/i.test(n));
-      return hit ? await saveCover(await fsp.readFile(path.join(dir, hit))) : null;
+      return hit && linkOk(path.join(dir, hit)) ? await saveCover(await fsp.readFile(path.join(dir, hit))) : null;
     } catch { dirCoverMemo.delete(dir); return null; }
   })());
   return dirCoverMemo.get(dir);
@@ -524,6 +549,7 @@ ipcMain.handle('track:info', async (e, paths) => {
   if (!strs(paths)) return [];
   const files = [];
   for (const p of paths) {
+    if (!linkOk(p)) continue;
     try {
       const st = await fsp.stat(p);
       if (st.isDirectory()) files.push(...(await walk(p, [])).sort());
@@ -548,15 +574,17 @@ ipcMain.handle('import:phone', () => {
 // ---------- playlists (m3u8) ----------
 const plEntry = (dir, l) => {
   if (isUrl(l)) return l;
-  if (/^file:/i.test(l)) try { return fileURLToPath(l); } catch {}
-  return path.resolve(dir, l);
+  let f;
+  if (/^file:/i.test(l)) try { f = fileURLToPath(l); } catch {}
+  f ??= path.resolve(dir, l);
+  return netOk(f) ? f : null;
 };
 async function parsePlaylist(file) {
   const text = decodeText(await fsp.readFile(file)), dir = path.dirname(file);
   const entries = /\.pls$/i.test(file)
     ? [...text.matchAll(/^File\d+=(.*)$/gmi)].map(m => m[1].trim())
     : text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-  return { name: path.basename(file, path.extname(file)), paths: entries.filter(Boolean).map(l => plEntry(dir, l)) };
+  return { name: path.basename(file, path.extname(file)), paths: entries.filter(Boolean).map(l => plEntry(dir, l)).filter(Boolean) };
 }
 ipcMain.handle('playlist:import', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Playlist', extensions: ['m3u', 'm3u8', 'pls'] }] });
@@ -575,7 +603,7 @@ ipcMain.handle('playlist:export', async (e, name, paths) => {
 const decoders = new Map();
 const isUrl = f => /^https?:\/\//i.test(f);
 // local files only (plus http(s) for internet radio): never let the renderer point ffmpeg at other protocols
-const playable = f => typeof f === 'string' && (isUrl(f) || (path.isAbsolute(f) && !/^[a-z]{2,}:/i.test(f)));
+const playable = f => typeof f === 'string' && (isUrl(f) || (path.isAbsolute(f) && !/^[a-z]{2,}:/i.test(f) && linkOk(f)));
 function killDecoders() { for (const d of decoders.values()) d.proc.kill(); decoders.clear(); xo?.msg({ type: 'stop' }); }
 const safeSend = (wc, ...a) => { if (!wc.isDestroyed()) wc.send(...a); };
 
@@ -718,9 +746,9 @@ ipcMain.handle('lyrics:get', async (e, t, online) => {
   const base = file.slice(0, -path.extname(file).length);
   if (isUrl(file) || t.cue) { /* no sidecar/tag for streams and CUE tracks: go straight online */ } else {
   for (const ext of ['.lrc', '.LRC'])
-    try { const text = decodeText(await fsp.readFile(base + ext)); if (text.trim() && !text.includes('\0')) return { source: 'LRC file', text }; } catch {}
+    try { if (!linkOk(base + ext)) continue; const text = decodeText(await fsp.readFile(base + ext)); if (text.trim() && !text.includes('\0')) return { source: 'LRC file', text }; } catch {}
   try {
-    const m = await parseFile(typeof t.path === 'string' ? t.path : file, { skipCovers: true });
+    const m = await parseFile(typeof t.path === 'string' && linkOk(t.path) ? t.path : file, { skipCovers: true });
     // Prefer the raw tag value: it keeps enhanced (word-level) LRC timing that the parsed form drops
     for (const tag of Object.values(m.native).flat())
       if (/^(LYRICS|UNSYNCEDLYRICS|©lyr)$/i.test(tag.id) && typeof tag.value === 'string' && tag.value.trim())

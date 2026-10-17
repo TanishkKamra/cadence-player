@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/lyrics.test.mjs && node test/queue.test.mjs && node test/exclusive.test.mjs && node test/eq.test.mjs",
+    "test": "node test/lyrics.test.mjs && node test/queue.test.mjs && node test/exclusive.test.mjs && node test/eq.test.mjs && node test/netpath.test.mjs",
     "build:native": "%WINDIR%\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe -nologo -O -platform:x64 -out:native\\cadence-wasapi.exe native\\wasapi.cs",
     "dist:beta": "npm run build:native && node tools/build-beta.mjs",
     "dist": "npm run build:native && electron-packager . Cadence --platform=win32 --arch=x64 --icon=build/icon.ico --out=release --overwrite --asar.unpack=**/{ffmpeg-static/ffmpeg.exe,native/cadence-wasapi.exe} --ignore=\"^/(test|release|dist|tools|scratch|import|[.]git|[.]vscode)(/|$)|^/(README[.]md|package-lock[.]json|[.]gitignore)$|^/native/[^/]+[.]cs$|[.](log|bak|bad|tmp|map)$\" --app-copyright=Cadence"
