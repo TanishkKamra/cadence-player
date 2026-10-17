@@ -327,6 +327,9 @@ function toneTab(content) {
   const toneOn = tgBtn('Tone', 'toneOn', applyTone, () => { bassK.setOff(!set.toneOn); trebleK.setOff(!set.toneOn); });
   const monoBtn = tgBtn('Mono', 'mono', () => { engine.setMono(set.mono); saveSettings(); });
   const volK = knob({ label: 'Volume', min: 0, max: 100, step: 1, value: Math.round(set.volume * 100), def: 80, size: 132, fmt: x => x + '%', onInput: x => { set.volume = x / 100; engine.setVolume(set.volume); saveSettings(); document.dispatchEvent(new Event('cadence:volume')); } });
+  const syncVol = () => volK.set(Math.round(set.volume * 100)); // the player bar, wheel, arrow keys and mute move the knob too
+  document.addEventListener('cadence:volume-ui', syncVol);
+  onTeardown(() => document.removeEventListener('cadence:volume-ui', syncVol));
   content.append(
     h('div', { class: 'fx-grid' },
       h('div', { class: 'fx-card reveal' }, h('h3', {}, 'Tone', toneOn), h('div', { class: 'knobs' }, bassK, trebleK,

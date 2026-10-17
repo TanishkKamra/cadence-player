@@ -65,7 +65,7 @@ function volumeSlider() {
   const r = h('input', { type: 'range', class: 'range', min: 0, max: 1, step: 0.01, value: set.volume, 'aria-label': 'Volume' });
   const paint = () => r.style.setProperty('--p', r.value * 100 + '%');
   paint();
-  r.addEventListener('input', () => { set.volume = +r.value; engine.setVolume(set.volume); paint(); updateVolIcon(); saveSettings(); });
+  r.addEventListener('input', () => setVolume(+r.value));
   r.addEventListener('wheel', e => { e.preventDefault(); setVolume(set.volume - Math.sign(e.deltaY) * 0.03); }, { passive: false });
   r.set = v => { r.value = v; paint(); };
   return r;
