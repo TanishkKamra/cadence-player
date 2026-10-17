@@ -27,8 +27,8 @@ const str = v => typeof v === 'string' && v.length > 0 && v.length < 4096 && !v.
 const strs = v => Array.isArray(v) && v.length < 1e5 && v.every(str);
 const num = (v, lo, hi, d) => typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
 const under = (f, d) => { const r = path.relative(d, f); return !!r && !r.startsWith('..') && !path.isAbsolute(r); };
-// UNC/device paths (\\host\share, //host, \\?\, \\.\) make Windows send NTLM credentials to the host: only allow them inside a library folder that is itself a share
-const netPath = f => /^[\\/]{2}/.test(f);
+// UNC/device/NT paths (\\host\share, //host, \\?\, \\.\, \??\) make Windows send NTLM credentials to the host: anything but X:\... must sit inside a library folder that is itself a share
+const netPath = f => !/^[a-z]:[\\/]/i.test(f);
 const netOk = (f, folders = library.folders) => !netPath(f) || folders.some(d => netPath(d) && under(f, d));
 const normFolder = f => path.resolve(/^[a-z]:$/i.test(f) ? f + '\\' : f);
 const sleepMs = ms => new Promise(r => setTimeout(r, ms));

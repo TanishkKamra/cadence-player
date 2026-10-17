@@ -18,8 +18,10 @@ assert.equal(netOk('D:\\Lossless music\\a.flac', local), true);
 assert.equal(netOk('C:\\elsewhere\\b.mp3', local), true);
 
 // UNC and device paths are refused without a share in the library
-for (const f of ['\\\\attacker\\share\\x.flac', '//host/x', '\\/host/x', '\\\\?\\C:\\x.flac', '\\\\.\\pipe\\x', '\\\\?\\UNC\\nas\\music\\a.flac'])
+for (const f of ['\\\\attacker\\share\\x.flac', '//host/x', '\\/host/x', '\\\\?\\C:\\x.flac', '\\\\.\\pipe\\x', '\\\\?\\UNC\\nas\\music\\a.flac', '\\??\\UNC\\attacker\\share\\x.flac', '/??/UNC/attacker/share/x.flac', '\\rooted\\x.flac', 'relative.flac'])
   assert.equal(netOk(f, local), false, f);
+// NT-namespace paths are not inside a share folder either
+assert.equal(netOk('\\??\\UNC\\nas\\music\\a.flac', share), false);
 
 // ...and with one, only paths inside it pass
 assert.equal(netOk('\\\\nas\\music\\Album\\a.flac', share), true);
@@ -47,6 +49,7 @@ for (const l of ['\\\\attacker\\share\\x.flac', '//host/x.flac', 'file://attacke
 // playable: same rule, plus http(s) streams
 assert.equal(playable('D:\\Lossless music\\a.flac'), true);
 assert.equal(playable('http://radio.example/s'), true);
+assert.equal(playable('\\??\\UNC\\attacker\\share\\x.flac'), false); // ffmpeg would pass this straight to NT
 assert.equal(playable('\\\\attacker\\share\\x.flac'), false);
 library.folders = ['\\\\nas\\music'];
 assert.equal(playable('\\\\nas\\music\\a.flac'), true);
