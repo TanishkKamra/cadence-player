@@ -338,6 +338,7 @@ async function boot() {
   S.bookmarks = cleanBookmarks(await api.invoke('store:get', 'bookmarks'));
   const state = set.resume ? cleanState(await api.invoke('store:get', 'state')) : null;
   applyTheme();
+  if (api.beta) $('.brand').append(h('span', { class: 'brand-tag' }, 'Beta'));
 
   const eng = new Engine({
     sampleRate: set.sampleRate || 0, device: set.device, volume: set.volume, exclusive: !!set.exclusive,

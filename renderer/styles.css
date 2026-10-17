@@ -1288,3 +1288,6 @@ body[data-theme="light"] .az.scrub { background: rgb(255 255 255 / .7); }
 .az button { transition: transform var(--spring-snappy-dur, .35s) var(--spring-snappy, var(--ease-out)), color var(--t-fast) ease-out; }
 .az.scrub button:hover { background: none; }
 .az button.on { color: rgb(var(--accent)); transform: scale(1.5); }
+
+/* Cadence Beta build: a small tag next to the name */
+.brand-tag { margin-left: 2px; padding: 2px 7px; border-radius: 999px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--accent)); background: rgb(var(--accent) / .14); box-shadow: inset 0 0 0 1px rgb(var(--accent) / .35); }

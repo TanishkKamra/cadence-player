@@ -126,7 +126,7 @@ function createWindow() {
     backgroundColor: wt.bg, title: 'Cadence', icon: path.join(ROOT, 'build', 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: wt.symbolColor, height: 38 },
-    webPreferences: { preload: path.join(ROOT, 'preload.cjs'), contextIsolation: true, sandbox: true },
+    webPreferences: { preload: path.join(ROOT, 'preload.cjs'), contextIsolation: true, sandbox: true, additionalArguments: /beta/i.test(app.getName()) ? ['--cadence-beta'] : [] },
   });
   if (maxed) win.maximize();
   win.once('ready-to-show', () => win.show());

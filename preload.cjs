@@ -11,6 +11,7 @@ const ON = new Set(['dec:data', 'dec:end', 'dec:error', 'dec:meta', 'library:pro
 const check = (set, ch) => { if (!set.has(ch)) throw new Error('blocked IPC channel: ' + ch); };
 
 contextBridge.exposeInMainWorld('api', {
+  beta: process.argv.includes('--cadence-beta'), // the Cadence Beta build (see tools/build-beta.mjs)
   invoke: (ch, ...a) => { check(INVOKE, ch); return ipcRenderer.invoke(ch, ...a); },
   send: (ch, ...a) => { check(SEND, ch); ipcRenderer.send(ch, ...a); },
   on: (ch, fn) => {
