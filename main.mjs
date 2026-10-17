@@ -27,6 +27,9 @@ const str = v => typeof v === 'string' && v.length > 0 && v.length < 4096 && !v.
 const strs = v => Array.isArray(v) && v.length < 1e5 && v.every(str);
 const num = (v, lo, hi, d) => typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
 const under = (f, d) => { const r = path.relative(d, f); return !!r && !r.startsWith('..') && !path.isAbsolute(r); };
+// UNC/device paths (\\host\share, //host, \\?\, \\.\) make Windows send NTLM credentials to the host: only allow them inside a library folder that is itself a share
+const netPath = f => /^[\\/]{2}/.test(f);
+const netOk = (f, folders = library.folders) => !netPath(f) || folders.some(d => netPath(d) && under(f, d));
 const normFolder = f => path.resolve(/^[a-z]:$/i.test(f) ? f + '\\' : f);
 const sleepMs = ms => new Promise(r => setTimeout(r, ms));
 const sha1 = s => crypto.createHash('sha1').update(s).digest('hex');
@@ -524,6 +527,7 @@ ipcMain.handle('track:info', async (e, paths) => {
   if (!strs(paths)) return [];
   const files = [];
   for (const p of paths) {
+    if (!netOk(p)) continue;
     try {
       const st = await fsp.stat(p);
       if (st.isDirectory()) files.push(...(await walk(p, [])).sort());
@@ -548,15 +552,17 @@ ipcMain.handle('import:phone', () => {
 // ---------- playlists (m3u8) ----------
 const plEntry = (dir, l) => {
   if (isUrl(l)) return l;
-  if (/^file:/i.test(l)) try { return fileURLToPath(l); } catch {}
-  return path.resolve(dir, l);
+  let f;
+  if (/^file:/i.test(l)) try { f = fileURLToPath(l); } catch {}
+  f ??= path.resolve(dir, l);
+  return netOk(f) ? f : null;
 };
 async function parsePlaylist(file) {
   const text = decodeText(await fsp.readFile(file)), dir = path.dirname(file);
   const entries = /\.pls$/i.test(file)
     ? [...text.matchAll(/^File\d+=(.*)$/gmi)].map(m => m[1].trim())
     : text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-  return { name: path.basename(file, path.extname(file)), paths: entries.filter(Boolean).map(l => plEntry(dir, l)) };
+  return { name: path.basename(file, path.extname(file)), paths: entries.filter(Boolean).map(l => plEntry(dir, l)).filter(Boolean) };
 }
 ipcMain.handle('playlist:import', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Playlist', extensions: ['m3u', 'm3u8', 'pls'] }] });
@@ -575,7 +581,7 @@ ipcMain.handle('playlist:export', async (e, name, paths) => {
 const decoders = new Map();
 const isUrl = f => /^https?:\/\//i.test(f);
 // local files only (plus http(s) for internet radio): never let the renderer point ffmpeg at other protocols
-const playable = f => typeof f === 'string' && (isUrl(f) || (path.isAbsolute(f) && !/^[a-z]{2,}:/i.test(f)));
+const playable = f => typeof f === 'string' && (isUrl(f) || (path.isAbsolute(f) && !/^[a-z]{2,}:/i.test(f) && netOk(f)));
 function killDecoders() { for (const d of decoders.values()) d.proc.kill(); decoders.clear(); xo?.msg({ type: 'stop' }); }
 const safeSend = (wc, ...a) => { if (!wc.isDestroyed()) wc.send(...a); };
 
@@ -720,7 +726,7 @@ ipcMain.handle('lyrics:get', async (e, t, online) => {
   for (const ext of ['.lrc', '.LRC'])
     try { const text = decodeText(await fsp.readFile(base + ext)); if (text.trim() && !text.includes('\0')) return { source: 'LRC file', text }; } catch {}
   try {
-    const m = await parseFile(typeof t.path === 'string' ? t.path : file, { skipCovers: true });
+    const m = await parseFile(typeof t.path === 'string' && netOk(t.path) ? t.path : file, { skipCovers: true });
     // Prefer the raw tag value: it keeps enhanced (word-level) LRC timing that the parsed form drops
     for (const tag of Object.values(m.native).flat())
       if (/^(LYRICS|UNSYNCEDLYRICS|©lyr)$/i.test(tag.id) && typeof tag.value === 'string' && tag.value.trim())
