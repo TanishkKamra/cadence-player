@@ -6,8 +6,8 @@ const INVOKE = new Set(['store:get', 'library:get', 'library:addFolder', 'librar
   'tags:write', 'file:trash', 'art:pick', 'art:fetch', 'art:cleanup', 'art:artists', 'autoeq:index', 'autoeq:get', 'backup:export', 'backup:import',
   'scrobble:listenbrainz']);
 const SEND = new Set(['store:set', 'dec:start', 'dec:ack', 'dec:stop', 'dec:reset', 'win:progress', 'win:fullscreen', 'win:thumbar',
-  'win:mini', 'win:theme', 'win:fitzoom', 'shell:show', 'shell:open', 'notify', 'power:keepAwake', 'xo:msg', 'hwvol:dev', 'hwvol:set']);
-const ON = new Set(['dec:data', 'dec:end', 'dec:error', 'dec:meta', 'library:progress', 'library:changed', 'open-files', 'cmd', 'xo:msg', 'hwvol']);
+  'win:mini', 'win:theme', 'win:fitzoom', 'shell:show', 'shell:open', 'notify', 'power:keepAwake', 'xo:msg']);
+const ON = new Set(['dec:data', 'dec:end', 'dec:error', 'dec:meta', 'library:progress', 'library:changed', 'open-files', 'cmd', 'xo:msg']);
 const check = (set, ch) => { if (!set.has(ch)) throw new Error('blocked IPC channel: ' + ch); };
 
 contextBridge.exposeInMainWorld('api', {

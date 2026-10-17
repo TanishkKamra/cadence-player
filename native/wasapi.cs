@@ -11,12 +11,8 @@
 //                         open <tag> <rate> <validBits> <containerBits> <bufferFrames>
 //                         fail <tag> <message>        refuse <tag> <message> (this rate/bit depth only)
 // argv[0]: endpoint friendly name ("" = default output).
-//
-// argv[0] = "--volume": the output device's own volume instead (see VolumeService).
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -47,7 +43,6 @@ static class Wasapi {
 
   [MTAThread]
   static void Main(string[] args) {
-    if (args.Length > 0 && args[0] == "--volume") { VolumeService(); return; }
     deviceName = args.Length > 0 ? args[0] : "";
     stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
     new Thread(Render) { IsBackground = true, Priority = ThreadPriority.Highest }.Start();
@@ -239,64 +234,7 @@ static class Wasapi {
     client = null; rc = null; cur = null; started = false; T = R = silDone = 0; sil.Clear();
   }
 
-  // ---------- --volume: the output device's own volume, like a phone's volume keys ----------
-  // stdin lines:  "dev <friendly name>" (empty = default output, followed when it changes), "set <0..1>"
-  // stdout lines: "vol <0..1> <muted 0|1> <hardware 0|1>" once per device and on every change made outside Cadence,
-  //               "none <message>" when the device or its volume control is unavailable
-  static void VolumeService() {
-    stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
-    var cmds = new ConcurrentQueue<string>();
-    new Thread(() => { string l; while ((l = Console.ReadLine()) != null) cmds.Enqueue(l); Environment.Exit(0); }) { IsBackground = true }.Start();
-    IAudioEndpointVolume ev = null; string evId = null; float last = -1f; bool lastMute = false, haveDev = false, down = false;
-    var ctx = Guid.Empty; var clock = Stopwatch.StartNew(); long resolveAt = 0;
-    while (true) {
-      try {
-        string c;
-        while (cmds.TryDequeue(out c)) {
-          if (c.StartsWith("dev ")) { deviceName = c.Substring(4); haveDev = true; ev = null; evId = null; resolveAt = 0; }
-          else if (c.StartsWith("set ") && ev != null) {
-            float v;
-            if (!float.TryParse(c.Substring(4), NumberStyles.Float, CultureInfo.InvariantCulture, out v) || float.IsNaN(v)) continue;
-            v = Math.Max(0f, Math.Min(1f, v));
-            ev.SetMasterVolumeLevelScalar(v, ref ctx);
-            if (v > 0 && lastMute) ev.SetMute(false, ref ctx);
-            last = v; lastMute = false; // our own change: not reported back
-          }
-        }
-        if (haveDev && clock.ElapsedMilliseconds >= resolveAt) { // follow a changed default device or a replugged one
-          resolveAt = clock.ElapsedMilliseconds + 1000;
-          string id; var dev = Find(out id);
-          if (id != evId) {
-            object o; var iid = typeof(IAudioEndpointVolume).GUID;
-            dev.Activate(ref iid, 23, IntPtr.Zero, out o);
-            ev = (IAudioEndpointVolume)o; evId = id; last = -1f;
-          }
-        }
-        if (ev != null) {
-          float v; bool m; ev.GetMasterVolumeLevelScalar(out v); ev.GetMute(out m);
-          if (Math.Abs(v - last) > 0.002f || m != lastMute) {
-            uint hw; ev.QueryHardwareSupport(out hw);
-            Say(string.Format(CultureInfo.InvariantCulture, "vol {0:0.####} {1} {2}", v, m ? 1 : 0, (hw & 1) != 0 ? 1 : 0));
-            last = v; lastMute = m;
-          }
-          down = false;
-        }
-      } catch (Exception e) {
-        if (!down) Say("none " + Describe(e)); // once per outage
-        down = true; ev = null; evId = null;
-      }
-      Thread.Sleep(150);
-    }
-  }
-
   static IAudioClient Activate() {
-    string id; var dev = Find(out id);
-    object o; var iid = typeof(IAudioClient).GUID;
-    dev.Activate(ref iid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out o);
-    return (IAudioClient)o;
-  }
-
-  static IMMDevice Find(out string devId) {
     var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
     IMMDevice dev = null;
     if (deviceName != "") {
@@ -313,8 +251,9 @@ static class Wasapi {
       }
       if (dev == null) throw new InvalidOperationException("Output device not found: " + deviceName); // never fall back to another endpoint
     } else en.GetDefaultAudioEndpoint(0, 1 /* multimedia */, out dev);
-    dev.GetId(out devId);
-    return dev;
+    object o; var iid = typeof(IAudioClient).GUID;
+    dev.Activate(ref iid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out o);
+    return (IAudioClient)o;
   }
 
   // Chromium labels carry a " (vid:pid)" suffix and a "Default - " prefix the endpoint's friendly name lacks
@@ -382,16 +321,4 @@ static class Wasapi {
   }
   [ComImport, Guid("F294ACFC-3146-4483-A7BF-ADDCA7C260E2"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
   interface IAudioRenderClient { void GetBuffer(uint frames, out IntPtr data); void ReleaseBuffer(uint frames, int flags); }
-  [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  interface IAudioEndpointVolume {
-    void RegisterControlChangeNotify(IntPtr notify); void UnregisterControlChangeNotify(IntPtr notify);
-    void GetChannelCount(out uint n);
-    void SetMasterVolumeLevel(float db, ref Guid ctx); void SetMasterVolumeLevelScalar(float v, ref Guid ctx);
-    void GetMasterVolumeLevel(out float db); void GetMasterVolumeLevelScalar(out float v);
-    void SetChannelVolumeLevel(uint ch, float db, ref Guid ctx); void SetChannelVolumeLevelScalar(uint ch, float v, ref Guid ctx);
-    void GetChannelVolumeLevel(uint ch, out float db); void GetChannelVolumeLevelScalar(uint ch, out float v);
-    void SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid ctx); void GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
-    void GetVolumeStepInfo(out uint step, out uint count); void VolumeStepUp(ref Guid ctx); void VolumeStepDown(ref Guid ctx);
-    void QueryHardwareSupport(out uint mask); void GetVolumeRange(out float min, out float max, out float inc);
-  }
 }

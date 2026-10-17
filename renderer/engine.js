@@ -119,10 +119,6 @@ export class Engine extends EventTarget {
     // exclusive (bit-perfect) output: main process + WASAPI helper stand in for the worklet, same messages
     this.xoPort = { postMessage: m => api.send('xo:msg', m) };
     api.on('xo:msg', m => this.onXo(m));
-    // device volume (like a phone): null = unavailable, else whether the device has a real hardware volume control
-    this.hwVol = null;
-    api.on('hwvol', m => this.onHwVol(m));
-    this.hwDevice();
   }
 
   emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
@@ -155,19 +151,10 @@ export class Engine extends EventTarget {
     this.dry = g(); this.wet = g(); this.conv = ctx.createConvolver();
     this.preDelay = ctx.createDelay(1); this.preTap = g(); this.wetFilter = bq('lowpass', 12000, 0.5);
     this.limIn = g();
-    this.limiter = ctx.createDynamicsCompressor();
-    this.limiter.threshold.value = -1; this.limiter.knee.value = 0; this.limiter.ratio.value = 20;
-    this.limiter.attack.value = 0.001; this.limiter.release.value = 0.08;
-    // the compressor adds makeup gain of -0.6 * (output level at 0 dBFS): cancel it so idle gain is exactly 0 dB
-    this.limPost = g(); this.limPost.gain.value = dbToGain(0.6 * (-1 + 1 / 20));
-    // ceiling: soft-saturate from the compressor threshold up to -0.3 dBFS; anything beyond +-1 maps to the curve's end
-    this.ceil = ctx.createWaveShaper(); this.ceil.oversample = '2x';
-    this.ceil.curve = Float32Array.from({ length: 4097 }, (_, i) => {
-      const x = Math.abs(i / 2048 - 1), t = dbToGain(-1), c = dbToGain(-0.3), y = x <= t ? x : t + (c - t) * Math.tanh((x - t) / (c - t));
-      return i < 2048 ? -y : y;
-    });
+    // look-ahead peak limiter (worklet.js): EQ boosts stay loud like in , only peaks above -0.3 dBFS are eased down
+    this.limiter = new AudioWorkletNode(ctx, 'cadence-limiter', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
     this.tap = g();      // post-DSP, pre-volume: visualizers read from here
-    this.volume = g();   // volume sits before the limiter (like ), so at normal levels EQ boosts use headroom instead of being limited
+    this.volume = g();   // volume sits before the limiter (like direct volume control)
 
     const chain = [this.node, this.fader, this.preamp, this.eqIn];
     chain.reduce((a, b) => (a.connect(b), b));
@@ -217,20 +204,16 @@ export class Engine extends EventTarget {
       const gone = this.eq.splice(this.o.eqBands.length);
       this.link(); gone.forEach(f => f.dispose());
     }, 200);
-    this.headroom();
+    this.preamp.gain.setTargetAtTime(on ? dbToGain(preamp) : 1, t, 0.02);
     this.regain();
+    this.limiterBoost();
   }
   setTone(on, bass, treble, bassFreq = this.o.bassFreq || 90, trebleFreq = this.o.trebleFreq || 9000) {
     Object.assign(this.o, { toneOn: on, bass, treble, bassFreq, trebleFreq });
     this.bass.set({ type: 'lowshelf', freq: bassFreq, q: 0.7 }, on ? bass : 0);
     this.treble.set({ type: 'highshelf', freq: trebleFreq, q: 0.7 }, on ? treble : 0);
-    this.headroom();
     this.regain();
-  }
-  // EQ, tone and preamp boosts are offset before they happen, so a full-scale track never reaches the limiter however loud
-  // the output is: loudness comes from the device volume, not from pushing the signal past 0 dBFS
-  headroom() {
-    this.preamp.gain.setTargetAtTime(dbToGain((this.o.eqOn ? this.o.preamp || 0 : 0) - this.boostDb()), this.ctx.currentTime, 0.02);
+    this.limiterBoost();
   }
   setBalance(v) { this.o.balance = v; this.balance.pan.setTargetAtTime(v, this.ctx.currentTime, 0.02); }
   setWidth(v) { this.o.width = v; if (!this.o.exclusive) this.port.postMessage({ type: 'width', value: v }); }
@@ -269,31 +252,19 @@ export class Engine extends EventTarget {
   }
   setLimiter(on) {
     this.o.limiter = on;
-    this.volume.disconnect(); this.limiter.disconnect(); this.limPost.disconnect(); this.ceil.disconnect();
-    if (on) this.volume.connect(this.limiter).connect(this.limPost).connect(this.ceil).connect(this.ctx.destination); else this.volume.connect(this.ctx.destination);
+    this.volume.disconnect(); this.limiter.disconnect();
+    if (on) this.volume.connect(this.limiter).connect(this.ctx.destination); else this.volume.connect(this.ctx.destination);
   }
-  setVolume(v, fromDevice = false) {
+  setVolume(v) {
     v = clamp(v, 0, 1, 0);
-    this.o.volume = v;
-    // exclusive mode bypasses Windows' software volume, so there only a real hardware control can stand in
-    const dev = this.hwVol != null && (this.hwVol || !this.o.exclusive);
-    const g = dev ? 1 : v * v;
-    this.volume.gain.setTargetAtTime(g, this.ctx.currentTime, 0.015);
-    if (this.o.exclusive) this.port.postMessage({ type: 'volume', value: g }); // < 1 scales samples: not bit-perfect
-    if (dev && !fromDevice) api.send('hwvol:set', v);
+    // applied inside Cadence before the limiter, like direct volume control: below full volume the EQ boosts
+    // have room to be heard as boosts; the limiter only steps in near the top of the slider
+    this.o.volume = v; this.volume.gain.setTargetAtTime(v * v, this.ctx.currentTime, 0.015);
+    if (this.o.exclusive) this.port.postMessage({ type: 'volume', value: v * v }); // < 100% scales samples: not bit-perfect
   }
   async deviceLabel() {
     const d = this.o.device && (await navigator.mediaDevices.enumerateDevices()).find(d => d.kind === 'audiooutput' && d.deviceId === this.o.device);
     return d?.label || '';
-  }
-  async hwDevice() { api.send('hwvol:dev', await this.deviceLabel()); }
-  // the device's volume is the truth: changes made with the keyboard, Windows or another app show up on the slider
-  onHwVol(m) {
-    const before = this.o.volume;
-    this.hwVol = m.type === 'vol' ? !!m.hw : null;
-    const v = m.type === 'vol' ? (m.muted ? 0 : m.v) : before;
-    if (this.volume) this.setVolume(v, true); else this.o.volume = v; // the chain is not built yet: init() applies it
-    if (Math.abs(v - before) > 0.004) this.emit('volume', v);
   }
   setCrossfade(sec) {
     this.o.crossfade = sec;
@@ -304,6 +275,12 @@ export class Engine extends EventTarget {
     this.regain();
   }
   regain() { for (const s of this.streams.values()) this.port.postMessage({ type: 'gain', id: s.id, gain: this.trackGain(s.track) }); }
+  // tell the limiter how much the EQ boosts each of its 10 octave bands, so a boosted band gives back its own boost first
+  limiterBoost() {
+    if (!this.limiter || !this.ctx) return;
+    const pre = this.o.eqOn ? this.o.preamp || 0 : 0, db = this.response([31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]);
+    this.limiter.port.postMessage({ boost: [...db].map(d => Math.pow(10, (d + pre) / 20)) });
+  }
   setTempoPitch(tempo, semitones) {
     tempo = clamp(tempo, 0.5, 2, 1); semitones = clamp(semitones, -12, 12, 0);
     if (tempo === this.o.tempo && semitones === this.o.semitones) return;
@@ -315,7 +292,6 @@ export class Engine extends EventTarget {
     sampleRate = okRate(sampleRate);
     const changedRate = sampleRate !== (this.o.sampleRate || 0);
     Object.assign(this.o, { device, sampleRate });
-    this.hwDevice();
     if (this.o.exclusive && !changedRate) return this.setExclusive(true); // reopens the helper on the new device
     if (!changedRate) return this.ctx.setSinkId(device || '').catch(e => this.emit('error', { message: 'Output device: ' + e.message }));
     const resume = this.cur && { entry: this.cur.entry, start: this.position, play: this.playing, quiet: true };
@@ -382,7 +358,7 @@ export class Engine extends EventTarget {
     if (db == null) return dbToGain(clamp(o.noRgPreamp, -24, 24, 0));
     let gain = dbToGain(clamp(db, -24, 24, 0) + clamp(o.rgPreamp, -24, 24, 0));
     const peak = useAlbum ? rg.ap : rg.tp;
-    if (o.preventClip && peak > 0) gain = Math.min(gain, 1 / peak); // EQ boosts are already offset by headroom()
+    if (o.preventClip && peak > 0) gain = Math.min(gain, 1 / (peak * dbToGain(this.boostDb())));
     return gain;
   }
   // worst-case positive gain the EQ / tone / preamp can add downstream of the per-stream gain
