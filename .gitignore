@@ -1,0 +1,11 @@
+node_modules/
+release/
+dist/
+# personal phone export: local only
+import/
+# ui-master run reports and other local tool output
+.impeccable/hook.cache.json
+*.log
+*.bak
+*.bad
+*.tmp

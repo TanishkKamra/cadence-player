@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' app:; img-src 'self' app: data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' app: 'unsafe-eval'; connect-src 'self' app:; worker-src 'self' app: blob:">
+  <title>Cadence</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Liquid Glass lens (styles.css "Liquid Glass material"): bends the backdrop at the rim, leaves the centre alone.
+       Generated maps: red = x shift, green = y shift, 128 = none; rim widths are in surface pixels. -->
+  <svg class="lg-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+    <filter id="lg-lens" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+      <feImage preserveAspectRatio="none" result="mx" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3ClinearGradient%20id%3D'a'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'0'%20x2%3D'28'%20y1%3D'0'%20y2%3D'0'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(255%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'0.35'%20stop-color%3D'rgb(176%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(128%2C0%2C0)'%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D'b'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'-28'%20x2%3D'0'%20y1%3D'0'%20y2%3D'0'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(128%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'0.65'%20stop-color%3D'rgb(80%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(0%2C0%2C0)'%2F%3E%3C%2FlinearGradient%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20fill%3D'rgb(128%2C0%2C0)'%2F%3E%3Crect%20%20width%3D'28'%20height%3D'100%25'%20fill%3D'url(%23a)'%2F%3E%3Csvg%20x%3D'100%25'%20overflow%3D'visible'%3E%3Crect%20x%3D'-28'%20width%3D'28'%20height%3D'100%25'%20fill%3D'url(%23b)'%2F%3E%3C%2Fsvg%3E%3C%2Fsvg%3E"/>
+      <feImage preserveAspectRatio="none" result="my" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3ClinearGradient%20id%3D'a'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'0'%20x2%3D'0'%20y1%3D'0'%20y2%3D'28'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(0%2C255%2C0)'%2F%3E%3Cstop%20offset%3D'0.35'%20stop-color%3D'rgb(0%2C176%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(0%2C128%2C0)'%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D'b'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'0'%20x2%3D'0'%20y1%3D'-28'%20y2%3D'0'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(0%2C128%2C0)'%2F%3E%3Cstop%20offset%3D'0.65'%20stop-color%3D'rgb(0%2C80%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(0%2C0%2C0)'%2F%3E%3C%2FlinearGradient%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20fill%3D'rgb(0%2C128%2C0)'%2F%3E%3Crect%20%20height%3D'28'%20width%3D'100%25'%20fill%3D'url(%23a)'%2F%3E%3Csvg%20y%3D'100%25'%20overflow%3D'visible'%3E%3Crect%20y%3D'-28'%20height%3D'28'%20width%3D'100%25'%20fill%3D'url(%23b)'%2F%3E%3C%2Fsvg%3E%3C%2Fsvg%3E"/>
+      <feComposite in="mx" in2="my" operator="arithmetic" k2="1" k3="1" result="map"/>
+      <feDisplacementMap in="SourceGraphic" in2="map" scale="44" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="lg-lens-sm" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+      <feImage preserveAspectRatio="none" result="mx" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3ClinearGradient%20id%3D'a'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'0'%20x2%3D'12'%20y1%3D'0'%20y2%3D'0'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(255%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'0.35'%20stop-color%3D'rgb(176%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(128%2C0%2C0)'%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D'b'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'-12'%20x2%3D'0'%20y1%3D'0'%20y2%3D'0'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(128%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'0.65'%20stop-color%3D'rgb(80%2C0%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(0%2C0%2C0)'%2F%3E%3C%2FlinearGradient%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20fill%3D'rgb(128%2C0%2C0)'%2F%3E%3Crect%20%20width%3D'12'%20height%3D'100%25'%20fill%3D'url(%23a)'%2F%3E%3Csvg%20x%3D'100%25'%20overflow%3D'visible'%3E%3Crect%20x%3D'-12'%20width%3D'12'%20height%3D'100%25'%20fill%3D'url(%23b)'%2F%3E%3C%2Fsvg%3E%3C%2Fsvg%3E"/>
+      <feImage preserveAspectRatio="none" result="my" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3ClinearGradient%20id%3D'a'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'0'%20x2%3D'0'%20y1%3D'0'%20y2%3D'12'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(0%2C255%2C0)'%2F%3E%3Cstop%20offset%3D'0.35'%20stop-color%3D'rgb(0%2C176%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(0%2C128%2C0)'%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D'b'%20gradientUnits%3D'userSpaceOnUse'%20x1%3D'0'%20x2%3D'0'%20y1%3D'-12'%20y2%3D'0'%3E%3Cstop%20offset%3D'0'%20stop-color%3D'rgb(0%2C128%2C0)'%2F%3E%3Cstop%20offset%3D'0.65'%20stop-color%3D'rgb(0%2C80%2C0)'%2F%3E%3Cstop%20offset%3D'1'%20stop-color%3D'rgb(0%2C0%2C0)'%2F%3E%3C%2FlinearGradient%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20fill%3D'rgb(0%2C128%2C0)'%2F%3E%3Crect%20%20height%3D'12'%20width%3D'100%25'%20fill%3D'url(%23a)'%2F%3E%3Csvg%20y%3D'100%25'%20overflow%3D'visible'%3E%3Crect%20y%3D'-12'%20height%3D'12'%20width%3D'100%25'%20fill%3D'url(%23b)'%2F%3E%3C%2Fsvg%3E%3C%2Fsvg%3E"/>
+      <feComposite in="mx" in2="my" operator="arithmetic" k2="1" k3="1" result="map"/>
+      <feDisplacementMap in="SourceGraphic" in2="map" scale="18" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+  <div id="bg" aria-hidden="true"><div class="bg-layer"></div><div class="bg-layer"></div><div class="bg-shade"></div></div>
+  <div id="app">
+    <header id="titlebar">
+      <div class="brand"><span class="brand-mark"></span>Cadence</div>
+      <div class="nav-btns">
+        <button class="icon-btn" id="side-toggle" title="Compact sidebar" aria-pressed="false"></button>
+        <button class="icon-btn" id="nav-back" title="Back (Alt+Left)"></button>
+      </div>
+      <label class="search"><span class="search-ic"></span><input id="search" type="search" placeholder="Search songs, albums, artists" spellcheck="false"></label>
+      <div class="titlebar-fill"></div>
+    </header>
+    <nav id="sidebar"></nav>
+    <main id="main"></main>
+    <aside id="player"></aside>
+  </div>
+  <div id="overlay-root"></div>
+  <div id="toasts"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
