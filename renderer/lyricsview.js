@@ -1,8 +1,9 @@
 // Synced / word-level lyrics view.
-import { h, icon, fmtTime, artUrl, signed, fmtQualityShort } from './util.js';
+import { h, icon, fmtTime, artUrl, signed, fmtQuality } from './util.js';
 import { S, set, engine, saveSettings, titleOf, artistOf } from './core.js';
 import { parseLyrics, activeLine } from './lyrics.js';
 import { back, onTeardown } from './views.js';
+import { flip } from './motion.js';
 
 const cache = new Map(); // path -> { p, at, online, ok }; misses expire and are retried when online lookup is toggled
 const MISS_TTL = 60000;
@@ -31,6 +32,13 @@ export function lyricsView() {
   v.append(head, scroll);
   let lines = [], lineEls = [], active = -2, userScrollAt = 0, track = null, raf, tm, synced = false;
   scroll.addEventListener('wheel', () => { userScrollAt = performance.now(); }, { passive: true });
+  // no lyrics column worth showing: Now Playing centres the cover (the state holds until the next song's lyrics are known)
+  const setSparse = on => {
+    if (v.classList.contains('ly-sparse') === on) return;
+    const art = v.parentElement?.querySelector('.npv-art'), from = art?.getBoundingClientRect();
+    v.classList.toggle('ly-sparse', on);
+    if (art) flip(art, from, 'smooth');
+  };
 
   const offsetLbl = h('span', { class: 'offset' });
   const showOffset = () => { offsetLbl.textContent = signed(set.lyricsOffset, 1, ' s'); };
@@ -43,11 +51,11 @@ export function lyricsView() {
     active = -2; lines = []; lineEls = []; synced = false;
     head.replaceChildren();
     scroll.replaceChildren();
-    if (!track) { scroll.append(h('div', { class: 'empty' }, h('h2', {}, 'Nothing playing'))); return; }
+    if (!track) { setSparse(true); scroll.append(h('div', { class: 'empty none' }, h('h2', {}, 'Nothing playing'))); return; }
     showOffset();
     head.append(track.art ? h('img', { src: artUrl(track.art), alt: '' }) : h('div', { class: 'ph' }, icon('song')),
       h('div', { class: 'ly-meta' }, h('div', { class: 't1' }, titleOf(track)), h('div', { class: 't2' }, [artistOf(track), track.album].filter(Boolean).join(' — ')),
-        h('div', { class: 't3' }, track.stream ? 'Live stream' : [fmtTime(track.duration), fmtQualityShort(track)].filter(Boolean).join(' · '))),
+        h('div', { class: 't3' }, track.stream ? 'Live stream' : [fmtQuality(track), fmtTime(track.duration)].filter(Boolean).join(' · '))),
       h('div', { class: 'tools' },
         h('div', { class: 'tool-group', role: 'group', 'aria-label': 'Lyrics timing' }, icon('offset', 'sm'),
           h('button', { class: 'icon-btn', title: 'Lyrics earlier (−0.1 s)', 'aria-label': 'Lyrics earlier', onclick: () => bump(-0.1) }, icon('minus', 'sm')), offsetLbl,
@@ -64,12 +72,14 @@ export function lyricsView() {
     if (t !== engine.track) return;
     scroll.replaceChildren();
     if (!ly) {
+      setSparse(true);
       scroll.append(h('div', { class: 'empty' }, h('h2', {}, 'No lyrics found'),
         h('div', {}, set.onlineLyrics ? 'No .lrc file, no lyrics tag and nothing on LRCLIB for this song.' : 'No .lrc file or lyrics tag. Online lookup is off in Settings.'),
         h('button', { class: 'tb-btn', onclick: searchWeb }, icon('search', 'sm'), 'Search the web')));
       return;
     }
     lines = ly.lines; synced = ly.synced;
+    setSparse(!synced && lines.filter(l => l.text).length <= 2); // e.g. a lone "♪ Instrumental ♪"
     lineEls = lines.map(l => h('p', {
       class: 'ly-line' + (synced ? '' : ' plain') + (!l.text ? ' gap' : '') + (l.voice && l.voice !== 'v1' ? ' alt' : ''),
       onclick: () => { if (synced) { engine.seek(Math.max(0, l.t + set.lyricsOffset)); userScrollAt = 0; } },
@@ -77,7 +87,7 @@ export function lyricsView() {
     scroll.append(...lineEls, h('div', { class: 'ly-source' }, `${synced ? 'Synced' : 'Unsynced'} lyrics · ${ly.source}`));
   }
   function tick() {
-    if (document.hidden || !engine.playing) tm = setTimeout(tick, 250); else raf = requestAnimationFrame(tick); // idle: no 60 fps loop
+    if (document.hidden || !engine.playing || !synced) tm = setTimeout(tick, 250); else raf = requestAnimationFrame(tick); // idle or nothing to sync: no per-frame loop
     if (engine.track !== track) { load(); return; }
     if (!synced || !lines.length) return;
     const pos = engine.position - set.lyricsOffset;

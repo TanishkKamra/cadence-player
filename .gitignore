@@ -1,5 +1,6 @@
 node_modules/
 release/
+release-beta/
 dist/
 # personal phone export: local only
 import/

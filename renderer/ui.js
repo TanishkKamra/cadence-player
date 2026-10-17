@@ -130,6 +130,20 @@ document.addEventListener('pointerover', e => {
   if (el.dataset.tip) tipT = setTimeout(() => showTip(el), performance.now() - tipHidAt < 400 ? 40 : 420); // skimming between controls: instant
 });
 document.addEventListener('pointerout', e => { if (tipEl && !tipEl.contains(e.relatedTarget)) hideTip(); });
+// keyboard focus shows the same tip (not on click focus); "(Alt+Left)" in the text becomes aria-keyshortcuts
+document.addEventListener('focusin', e => {
+  const el = e.target.closest?.('[title], [data-tip]');
+  if (!el || !el.matches(':focus-visible')) return;
+  if (el.hasAttribute('title')) {
+    if (el.title) { el.dataset.tip = el.title; if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', el.title); }
+    el.removeAttribute('title');
+  }
+  const k = el.dataset.tip?.match(/\(([^()]+)\)$/)?.[1];
+  if (k && /^[A-Za-z0-9+\[\] ]+$/.test(k) && !el.hasAttribute('aria-keyshortcuts')) el.setAttribute('aria-keyshortcuts', k.replace(/\bLeft\b/, 'ArrowLeft').replace(/\bRight\b/, 'ArrowRight').replace(/\bUp\b/, 'ArrowUp').replace(/\bDown\b/, 'ArrowDown'));
+  hideTip(); tipEl = el;
+  if (el.dataset.tip) showTip(el);
+});
+document.addEventListener('focusout', e => { if (tipEl === e.target.closest?.('[title], [data-tip]')) hideTip(); });
 for (const ev of ['pointerdown', 'wheel', 'keydown']) addEventListener(ev, hideTip, { capture: true, passive: true });
 // ---------- scroll reveal: elements with .reveal fade up once as they enter the viewport ----------
 const io = new IntersectionObserver(entries => {
@@ -150,7 +164,7 @@ export function toast(msg, err, action) {
   const key = String(msg).replace(/\b(0x)?[0-9a-f]{8,16}\b/gi, '#');
   if (key === lastToast.key && performance.now() - lastToast.at < 1500) return;
   lastToast = { key, at: performance.now() };
-  const t = h('div', { class: 'toast' + (err ? ' err' : '') }, msg,
+  const t = h('div', { class: 'toast' + (err ? ' err' : ''), role: err ? 'alert' : null }, msg,
     action ? h('button', { class: 'toast-act', onclick: () => { action.run(); t.remove(); } }, action.label) : null);
   if (action) t.style.pointerEvents = 'auto';
   $('#toasts').append(t);
@@ -162,7 +176,8 @@ const openDlg = new Map();
 export function dialog(title, body, actions, wide) {
   if (openDlg.has(title)) return openDlg.get(title); // never stack a second copy
   const p = new Promise(resolve => {
-    const close = v => { document.removeEventListener('keydown', onKey, true); scrim.remove(); openDlg.delete(title); resolve(v); };
+    const prev = document.activeElement; // restore focus on close
+    const close = v => { document.removeEventListener('keydown', onKey, true); scrim.remove(); openDlg.delete(title); if (prev?.isConnected) prev.focus(); resolve(v); };
     const last0 = actions.at(-1);
     const box = h('div', { class: 'dialog' + (wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title, tabindex: '-1' }, h('h2', {}, title), body,
       h('div', { class: 'actions' }, ...actions.map(a => h('button', { class: 'tb-btn' + (a.primary ? ' primary' : '') + (a.danger ? ' danger' : ''), onclick: () => close(a.value ? a.value() : a.id) }, a.label))));
@@ -232,7 +247,7 @@ export function knob({ label, min, max, step = 0.1, value, def = 0, fmt = v => v
     const r = (a - 90) * Math.PI / 180;
     dot.setAttribute('cx', C + 17 * Math.cos(r)); dot.setAttribute('cy', C + 17 * Math.sin(r));
     val.textContent = fmt(v);
-    dial.setAttribute('aria-valuenow', v);
+    dial.setAttribute('aria-valuenow', v); dial.setAttribute('aria-valuetext', val.textContent);
   };
   const setV = nv => { nv = +(Math.round(Math.min(max, Math.max(min, nv)) / step) * step).toFixed(4); if (nv !== v) { v = nv; draw(); onInput(v); } };
   dial.addEventListener('pointerdown', e => {
@@ -267,11 +282,13 @@ export function ratingEl(t, cls = '') {
 
 // ---------- track list (virtualised) ----------
 export const ROW_H = 56;
+let vlN = 0;
 export function trackList(tracks, { ctx, numbered = 'index', playlist = null, sortable = false, az = false, sortBtn, inline = false } = {}) {
   const sel = new Set();
   let anchor = -1;
   const filtered = () => playlist && tracks.length !== plTracks(playlist).length; // rows no longer match the playlist
-  const wrap = h('div', { class: 'vlist' + (inline ? ' inline' : '') });
+  const uid = 'vl' + (++vlN) + '-';
+  const wrap = h('div', { class: 'vlist' + (inline ? ' inline' : ''), role: 'listbox', 'aria-label': 'Songs', 'aria-multiselectable': 'true' });
   const inner = h('div', { class: 'vinner', style: { height: tracks.length * ROW_H + 'px' } });
   wrap.append(inner);
   let first = -1, last = -1;
@@ -284,7 +301,7 @@ export function trackList(tracks, { ctx, numbered = 'index', playlist = null, so
     const no = showNo === 'track' && t.track ? t.track : i + 1;
     const num = isCur ? h('span', { class: 'eq-bars' }, h('i'), h('i'), h('i')) : h('span', { class: 'n' }, no);
     const r = h('div', {
-      class: 'row' + (sel.has(i) ? ' sel' : '') + (isCur ? ' playing' : ''), style: { top: i * ROW_H + 'px' }, dataset: { i }, draggable: true, role: 'row',
+      class: 'row' + (sel.has(i) ? ' sel' : '') + (isCur ? ' playing' : ''), style: { top: i * ROW_H + 'px' }, dataset: { i }, draggable: true, role: 'option', id: uid + i, 'aria-selected': String(sel.has(i)),
       ondblclick: () => playFrom(tracks, i, ctx),
       onclick: e => { if (e.target.closest('.num') && !e.shiftKey && !e.ctrlKey) return playFrom(tracks, i, ctx); select(i, e); },
       oncontextmenu: e => openMenu(e, i),
@@ -326,7 +343,8 @@ export function trackList(tracks, { ctx, numbered = 'index', playlist = null, so
     if (e.shiftKey && anchor >= 0) { sel.clear(); for (let k = Math.min(anchor, i); k <= Math.max(anchor, i); k++) sel.add(k); }
     else if (e.ctrlKey) { sel.has(i) ? sel.delete(i) : sel.add(i); anchor = i; }
     else { sel.clear(); sel.add(i); anchor = i; }
-    for (const r of inner.children) r.classList.toggle('sel', sel.has(+r.dataset.i)); // no row rebuild
+    for (const r of inner.children) { r.classList.toggle('sel', sel.has(+r.dataset.i)); r.setAttribute('aria-selected', String(sel.has(+r.dataset.i))); } // no row rebuild
+    if (i != null) wrap.setAttribute('aria-activedescendant', uid + i); // arrows move a cursor, not DOM focus
   };
   const ensureSel = i => { if (!sel.has(i)) select(i, {}); };
   const openMenu = (e, i) => { ensureSel(i); trackMenu(e, selected(), { playlist: filtered() ? null : playlist, rows: [...sel].sort((a, b) => a - b), index: i, list: tracks, ctx }); };
@@ -367,15 +385,17 @@ export function trackList(tracks, { ctx, numbered = 'index', playlist = null, so
     sb('Title', 'title'), h('span', { class: 'c-album' }, sb('Album', 'album')), h('span', { class: 'c-q' }, 'Quality'), h('span', { class: 'r' }, sb('Time', 'duration')), h('span'), h('span'));
   if (inline) { inner.style.position = 'relative'; return h('div', { class: 'inline-list' }, head, wrap); }
   const box = h('div', { class: 'list-box' }, head, wrap);
-  if (az) box.append(azRail(letter => { const i = tracks.findIndex(t => letterOf(titleOf(t)) === letter); if (i >= 0) wrap.scrollToIndex(i); }));
+  if (az) box.append(azRail(letter => { const i = tracks.findIndex(t => letterOf(titleOf(t)) === letter); if (i >= 0) wrap.scrollToIndex(i); }, new Set(tracks.map(t => letterOf(titleOf(t))))));
   box.list = wrap;
   return box;
 }
 export function refreshLists() { document.querySelectorAll('.vlist').forEach(v => v.refresh?.()); }
 
 export const letterOf = s => { const c = norm(s).trim()[0] || '#'; return /[a-z]/.test(c) ? c.toUpperCase() : /[0-9]/.test(c) ? '0' : '#'; };
-export function azRail(onPick) {
-  return h('div', { class: 'az', 'aria-label': 'Jump to letter' }, ...['0', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'].map(l => h('button', { onclick: () => onPick(l) }, l)));
+export function azRail(onPick, has) { // has: optional Set of letters with items; others render disabled
+  return h('div', { class: 'az', 'aria-label': 'Jump to letter' }, ...['0', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'].map(l => has && !has.has(l)
+    ? h('button', { class: 'empty', 'aria-disabled': 'true', tabindex: '-1' }, l)
+    : h('button', { onclick: () => onPick(l) }, l)));
 }
 
 // ---------- card grid / category list ----------

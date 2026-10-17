@@ -5,6 +5,7 @@ import { menu, toast, ratingEl } from './ui.js';
 import { togglePlay, next, prev, jumpCategory, setShuffle, cycleRepeat, rate, trackMenu, addBookmark, enqueueUI } from './actions.js';
 import { go, back } from './views.js';
 import { Viz } from './viz.js';
+import { fade, spring } from './motion.js';
 import { hasLocalLyrics } from './lyricsview.js';
 import { audioInfo } from './eq.js';
 
@@ -121,24 +122,35 @@ export function drawSeek(frac) {
   // skip repaints that wouldn't change a single bar (a 4-minute song moves one bar every ~2 s)
   P.lastFrac = frac;
   const grow = P.wave ? Math.min(1, (performance.now() - (P.waveAt || 0)) / 520) : 0, k = 1 - (1 - grow) ** 3;
-  const key = `${Math.floor(frac * W / (3 * dpr))}|${W}|${H}|${P.wave ? 1 : 0}|${k.toFixed(3)}|${document.documentElement.style.getPropertyValue('--accent')}`;
+  seekAria(frac);
+  const key = `${Math.floor(frac * W / (3 * dpr))}|${W}|${H}|${P.wave ? 1 : 0}|${k.toFixed(3)}|${document.documentElement.style.getPropertyValue('--accent')}|${document.body.dataset.theme}`;
   if (key === P.seekKey) return;
   P.seekKey = key;
   if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
   const g = c.getContext('2d');
   g.clearRect(0, 0, W, H);
-  const peaks = P.wave, accent = accentRGB(), x = frac * W;
+  const peaks = P.wave, accent = accentRGB(), x = frac * W, rest = document.body.dataset.theme === 'light' ? 'rgba(0,0,0,0.26)' : 'rgba(255,255,255,0.22)';
   // bars rise out of a dotted baseline when the peaks arrive, so a track change never blinks the waveform away
   const n = Math.floor(W / (3 * dpr)), bw = 2 * dpr;
   for (let i = 0; i < n; i++) {
     const p = peaks?.length ? (peaks[Math.floor(i / n * peaks.length)] || 0) * k : 0;
     const hh = Math.max(2 * dpr, p * (H - 8 * dpr));
     const px = i * 3 * dpr;
-    g.fillStyle = px < x ? `rgba(${accent},0.95)` : 'rgba(255,255,255,0.22)';
+    g.fillStyle = px < x ? `rgba(${accent},0.95)` : rest;
     g.fillRect(px, (H - hh) / 2, bw, hh);
   }
   P.seek.thumb.style.left = frac * 100 + '%';
-  P.seek.setAttribute('aria-valuenow', Math.round(frac * 100));
+}
+// ~4 Hz cap for screen-reader chatter; a throttled value is flushed once the burst ends, so it never stays stale
+function seekAria(frac) {
+  const now = performance.now();
+  clearTimeout(P.ariaTm);
+  if (now - (P.ariaAt || 0) < 250) { P.ariaTm = setTimeout(() => seekAria(P.lastFrac), 260); return; }
+  P.ariaAt = now;
+  const s = P.seek, dur = engine.track?.duration;
+  s.setAttribute('aria-valuemin', '0'); s.setAttribute('aria-valuemax', '100');
+  s.setAttribute('aria-valuenow', Math.round(frac * 100));
+  s.setAttribute('aria-valuetext', dur ? `${fmtTime(frac * dur)} of ${fmtTime(dur)}` : `${Math.round(frac * 100)}%`);
 }
 
 // ---------- art + accent ----------
@@ -217,6 +229,9 @@ export function updatePlayer() {
   const changed = t !== P.shown || t?.art !== P.shownArt;
   P.shown = t; P.shownArt = t?.art;
   if (changed) setArt(t);
+  // track change: title, artist and format rise out of a mask one after another, behind the cover
+  if (changed && t && set.artAnim) [P.title, P.line2, P.meta].forEach((c, i) => fade(c, [
+    { opacity: 0, transform: 'translateY(60%)', clipPath: 'inset(0 0 60% 0)' }, { opacity: 1, transform: 'none', clipPath: 'inset(0 0 0 0)' }], 620, { delay: 90 + i * 60, fill: 'backwards' }));
   marquee(P.title, t ? (P.streamTitle && t.stream ? P.streamTitle : titleOf(t)) : 'Nothing playing');
   marquee(P.line2, t ? [artistOf(t), t.stream ? t.title : t.album].filter(Boolean).join(' — ') : 'Pick something from your library');
   P.meta.textContent = t ? (t.stream ? 'Live stream' : `${fmtQuality(t)} · ${fmtTime(t.duration)}`) : '';
@@ -236,7 +251,11 @@ export function updatePlayer() {
 export function updateButtons() {
   if (!P.play) return;
   const playing = !!engine?.playing;
-  P.play.replaceChildren(icon(playing ? 'pause' : 'play'));
+  if (P.playShown !== playing) { // swap the glyph only on a real change, with a small spring so it morphs instead of blinking
+    P.playShown = playing;
+    P.play.replaceChildren(icon(playing ? 'pause' : 'play'));
+    spring(P.play.firstChild, [{ opacity: 0, transform: 'scale(.55) rotate(-25deg)' }, { opacity: 1, transform: 'none' }], 'snappy');
+  }
   if (P.miniPlay) P.miniPlay.replaceChildren(icon(playing ? 'pause' : 'play'));
   P.repeat.replaceChildren(icon(S.repeat === 'one' ? 'repeatOne' : 'repeat'));
   P.repeat.classList.toggle('on', S.repeat !== 'off');

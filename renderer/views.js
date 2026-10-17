@@ -1,7 +1,7 @@
 // Sidebar, navigation and library views.
-import { h, $, icon, fmtTime, fmtLong, artUrl, splitNames, plural, fmtQualityShort } from './util.js';
+import { h, $, icon, fmtTime, fmtLong, artUrl, splitNames, plural, fmtQualityShort, fmtQuality } from './util.js';
 import { S, set, engine, hooks, smartList, plTracks as plTracksRaw, saveSettings, savePlaylists, dirOf, base, searchMatch, titleOf, artistOf, streamTrack, fileOf } from './core.js';
-import { trackList, grid, azRail, ROW_H, toast, menu, cta, observeReveals, dropdown } from './ui.js';
+import { trackList, grid, azRail, letterOf, ROW_H, toast, menu, cta, observeReveals, dropdown } from './ui.js';
 import { playList, enqueueUI, playlistMenu, newPlaylist, importPlaylists, addToPlaylist, addStream, playStream, openBookmark, trackMenu, downloadArt } from './actions.js';
 import { lyricsView } from './lyricsview.js';
 import { spring, fade, flip, motionOff } from './motion.js';
@@ -180,7 +180,8 @@ export function renderSidebar() {
 
 // ---------- building blocks ----------
 function viewHead({ cat, art, round, kicker, title, sub }) {
-  return h('div', { class: 'view-head' },
+  // a soft wash of the collection's own cover sits behind the header (static, one small image)
+  return h('div', { class: 'view-head' + (art ? ' washed' : ''), style: art ? { '--head-art': `url("${artUrl(art)}")` } : null },
     cat ? catIcon(cat, 72) : art !== undefined ? (art ? h('img', { class: 'art' + (round ? ' round' : ''), src: artUrl(art, true), alt: '' }) : h('div', { class: 'art ph' + (round ? ' round' : '') }, icon(round ? 'artist' : 'album', 'lg'))) : null,
     h('div', { class: 'view-title' }, kicker ? h('div', { class: 'kicker' }, kicker) : null, h('h1', {}, title), sub ? h('div', { class: 'sub' }, sub) : null));
 }
@@ -227,7 +228,8 @@ function gridView(cat, title, items, opts) {
   const viewBtn = h('button', { class: 'tb-btn', title: asList ? 'Grid view' : 'List view', onclick: () => { set.grid[cat] = asList; saveSettings(); render('swap'); } }, icon(asList ? 'grid' : 'lyrics'));
   const v = h('section', { class: 'view' }, viewHead({ cat, title, sub: plural(items.length, 'item') }),
     toolbar(() => items.flatMap(i => i.tracks), { label: title, view: { name: cat } }, { onFilter: draw, extra: [h('span', { class: 'tb-spacer' }), ...(opts.extra || []), viewBtn] }), scroll);
-  if (opts.az && items.length > 20) v.append(azRail(l => scroll.querySelector(`[data-letter="${l}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })));
+  if (opts.az && items.length > 20) v.append(azRail(l => scroll.querySelector(`[data-letter="${l}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
+    new Set(items.map(i => letterOf(i.name)))));
   return v;
 }
 export function sortedSongs() {
@@ -406,8 +408,9 @@ export const VIEWS = {
       t?.art ? h('img', { class: 'npv-art', src: artUrl(t.art, true), alt: '' }) : h('div', { class: 'npv-art ph' }, icon('song', 'xl')),
       h('div', { class: 'npv-title' }, t ? titleOf(t) : 'Nothing playing'),
       h('div', { class: 'npv-sub' }, t ? [artistOf(t), t.album].filter(Boolean).join(' — ') : ''),
-      t ? h('div', { class: 'npv-q' }, t.stream ? 'Live stream' : `${t.codec}${t.bits ? ' · ' + t.bits + '-bit' : ''}${t.sampleRate ? ' · ' + t.sampleRate / 1000 + ' kHz' : ''}`) : null);
-    const v = h('section', { class: 'view npv' }, left, lyricsView());
+      t ? h('div', { class: 'npv-q' }, t.stream ? 'Live stream' : fmtQuality(t)) : null);
+    // the glow is a real element, not ::before: pseudo-element loops here run on the main thread every frame
+    const v = h('section', { class: 'view npv' }, h('div', { class: 'npv-glow', 'aria-hidden': 'true' }), left, lyricsView());
     return v;
   },
   eq: () => eqView(),

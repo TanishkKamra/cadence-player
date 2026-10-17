@@ -102,7 +102,8 @@ function tgBtn(label, key, apply, after) {
 
 // ---------- Equalizer tab ----------
 function eqTab(content) {
-  const curve = h('canvas', { 'aria-label': 'Equalizer frequency response' });
+  const curve = h('canvas', { 'aria-label': 'Equalizer frequency response', tabindex: '0', role: 'application' });
+  curve.setAttribute('aria-label', 'EQ curve. Arrow keys move the selected band, Shift+Up/Down changes width, Tab moves between bands via the band cards');
   const curveBox = h('div', { class: 'eq-curve' }, curve);
   const presetBtn = pickerButton(set.eqPreset || 'Custom', () => presetItems(), 'preset-btn');
   const markCustom = () => { if (set.eqPreset !== 'Custom') { set.eqPreset = 'Custom'; presetBtn.setLabel('Custom'); } };
@@ -148,6 +149,8 @@ function eqTab(content) {
   const fft = new Uint8Array(an.frequencyBinCount);
   onTeardown(() => { try { engine.tap.disconnect(an); } catch {} });
 
+  const st = document.createElement('canvas'); // offscreen cache of the static layer
+  let stKey = '', sel = 0, drag = 0; // selected band, active pointer drags
   function drawCurve() {
     const dpr = devicePixelRatio, W = Math.round(curve.clientWidth * dpr), H = Math.round(curve.clientHeight * dpr);
     if (!W) return;
@@ -171,21 +174,32 @@ function eqTab(content) {
         g.beginPath(); set.vizSpectrumStyle === 'rounded' ? g.roundRect(i * 6 * dpr, H - hh, bw, hh, bw / 2) : g.rect(i * 6 * dpr, H - hh, bw, hh); g.fill();
       }
     }
-    g.strokeStyle = `rgba(${ink},0.07)`; g.lineWidth = dpr; g.font = `${10 * dpr}px Segoe UI`; g.fillStyle = `rgba(${ink},0.35)`;
-    for (const f of [30, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) { g.beginPath(); g.moveTo(fx(f), 0); g.lineTo(fx(f), H); g.stroke(); g.fillText(fmtF(f), fx(f) + 3 * dpr, H - 5 * dpr); }
-    for (const db of [-12, -6, 0, 6, 12]) { g.beginPath(); g.moveTo(0, dy(db)); g.lineTo(W, dy(db)); g.stroke(); g.fillText((db > 0 ? '+' : '') + db, 4 * dpr, dy(db) + 12 * dpr); }
-    const N = 256, freqs = Array.from({ length: N }, (_, i) => Math.pow(10, lo + (hi - lo) * i / (N - 1)));
-    const resp = engine.response(freqs);
-    g.beginPath();
-    resp.forEach((db, i) => { const x = fx(freqs[i]), y = dy(Math.max(-dbMax, Math.min(dbMax, db))); i ? g.lineTo(x, y) : g.moveTo(x, y); });
-    g.strokeStyle = `rgb(${accent})`; g.lineWidth = 2.5 * dpr; g.shadowColor = `rgba(${accent},0.6)`; g.shadowBlur = 10 * dpr; g.stroke(); g.shadowBlur = 0;
-    g.lineTo(W, dy(0)); g.lineTo(0, dy(0)); g.closePath();
-    const grad = g.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, `rgba(${accent},0.28)`); grad.addColorStop(1, `rgba(${accent},0.02)`);
-    g.fillStyle = grad; g.fill();
-    if (set.eqMode === 'parametric') set.params.forEach((b, i) => {
-      g.beginPath(); g.arc(fx(b.freq), dy(['lowpass', 'highpass', 'notch'].includes(b.type) ? 0 : b.gain), 7 * dpr, 0, Math.PI * 2);
-      g.fillStyle = BAND_COLORS[i % BAND_COLORS.length]; g.fill(); g.strokeStyle = '#000'; g.lineWidth = 2 * dpr; g.stroke();
-    });
+    // grid + response + points change rarely: cache them offscreen, rebuild only on band/size/theme/selection change
+    const fv = document.activeElement === curve && curve.matches(':focus-visible');
+    const key = [W, H, dpr, set.eqMode, ink, accent, JSON.stringify(eqBands()), set.preamp, set.eqOn, set.toneOn, set.bass, set.treble, set.bassFreq, set.trebleFreq, sel, fv].join('|');
+    if (key !== stKey) {
+      stKey = key;
+      if (st.width !== W || st.height !== H) { st.width = W; st.height = H; }
+      const sg = st.getContext('2d');
+      sg.clearRect(0, 0, W, H);
+      sg.strokeStyle = `rgba(${ink},0.07)`; sg.lineWidth = dpr; sg.font = `${10 * dpr}px Segoe UI`; sg.fillStyle = `rgba(${ink},0.35)`;
+      for (const f of [30, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) { sg.beginPath(); sg.moveTo(fx(f), 0); sg.lineTo(fx(f), H); sg.stroke(); sg.fillText(fmtF(f), fx(f) + 3 * dpr, H - 5 * dpr); }
+      for (const db of [-12, -6, 0, 6, 12]) { sg.beginPath(); sg.moveTo(0, dy(db)); sg.lineTo(W, dy(db)); sg.stroke(); sg.fillText((db > 0 ? '+' : '') + db, 4 * dpr, dy(db) + 12 * dpr); }
+      const N = 256, freqs = Array.from({ length: N }, (_, i) => Math.pow(10, lo + (hi - lo) * i / (N - 1)));
+      const resp = engine.response(freqs);
+      sg.beginPath();
+      resp.forEach((db, i) => { const x = fx(freqs[i]), y = dy(Math.max(-dbMax, Math.min(dbMax, db))); i ? sg.lineTo(x, y) : sg.moveTo(x, y); });
+      sg.strokeStyle = `rgb(${accent})`; sg.lineWidth = 2.5 * dpr; sg.shadowColor = `rgba(${accent},0.6)`; sg.shadowBlur = 10 * dpr; sg.stroke(); sg.shadowBlur = 0;
+      sg.lineTo(W, dy(0)); sg.lineTo(0, dy(0)); sg.closePath();
+      const grad = sg.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, `rgba(${accent},0.28)`); grad.addColorStop(1, `rgba(${accent},0.02)`);
+      sg.fillStyle = grad; sg.fill();
+      if (set.eqMode === 'parametric') set.params.forEach((b, i) => {
+        sg.beginPath(); sg.arc(fx(b.freq), dy(['lowpass', 'highpass', 'notch'].includes(b.type) ? 0 : b.gain), 7 * dpr, 0, Math.PI * 2);
+        sg.fillStyle = BAND_COLORS[i % BAND_COLORS.length]; sg.fill(); sg.strokeStyle = '#000'; sg.lineWidth = 2 * dpr; sg.stroke();
+        if (fv && i === sel) { sg.beginPath(); sg.arc(fx(b.freq), dy(['lowpass', 'highpass', 'notch'].includes(b.type) ? 0 : b.gain), 12 * dpr, 0, Math.PI * 2); sg.strokeStyle = `rgb(${ink})`; sg.lineWidth = 2 * dpr; sg.stroke(); } // keyboard focus ring
+      });
+    }
+    g.drawImage(st, 0, 0);
     curve.map = { fx, dy, W, H, lo, hi, dbMax, dpr };
   }
   // drag parametric points: x = frequency, y = gain, wheel = Q; double-click adds a band
@@ -198,6 +212,7 @@ function eqTab(content) {
     if (set.eqMode !== 'parametric' || !curve.map) return;
     const i = hitBand(e, 14);
     if (i < 0) return;
+    sel = i; drag++;
     const m = curve.map, r = curve.getBoundingClientRect();
     curve.setPointerCapture(e.pointerId);
     const mv = ev => {
@@ -207,10 +222,30 @@ function eqTab(content) {
       markCustom(); applyEq(); syncCards();
     };
     curve.addEventListener('pointermove', mv);
-    const end = () => { curve.removeEventListener('pointermove', mv); curve.removeEventListener('pointerup', end); curve.removeEventListener('pointercancel', end); };
+    const end = () => { drag = Math.max(0, drag - 1); curve.removeEventListener('pointermove', mv); curve.removeEventListener('pointerup', end); curve.removeEventListener('pointercancel', end); };
     curve.addEventListener('pointerup', end);
     curve.addEventListener('pointercancel', end);
   });
+  // keyboard: same update path as dragging (markCustom/applyEq/syncCards), same limits
+  const ROUND = ['lowpass', 'highpass', 'notch'];
+  curve.addEventListener('keydown', e => {
+    if (set.eqMode !== 'parametric' || !set.params.length || e.ctrlKey || e.altKey || e.metaKey) return;
+    sel = Math.min(sel, set.params.length - 1);
+    const b = set.params[sel], k = e.key, n = set.params.length;
+    if (k === '[' || k === 'PageUp') sel = (sel + n - 1) % n;
+    else if (k === ']' || k === 'PageDown') sel = (sel + 1) % n;
+    else if (k === 'ArrowLeft' || k === 'ArrowRight') b.freq = Math.round(Math.min(20000, Math.max(20, b.freq * Math.pow(2, (k === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 1 / 3 : 1 / 12)))));
+    else if (k === 'ArrowUp' || k === 'ArrowDown') {
+      const up = k === 'ArrowUp';
+      if (e.shiftKey) b.q = Math.round(Math.max(0.1, Math.min(12, b.q * (up ? 1.1 : 0.9))) * 100) / 100;
+      else if (!ROUND.includes(b.type)) b.gain = Math.round(Math.max(-15, Math.min(15, b.gain + (up ? 0.5 : -0.5))) * 10) / 10;
+    } else return;
+    e.preventDefault(); e.stopPropagation();
+    if (k !== '[' && k !== ']' && k !== 'PageUp' && k !== 'PageDown') { markCustom(); applyEq(); syncCards(); }
+    drawCurve();
+  });
+  curve.addEventListener('focus', () => drawCurve());
+  curve.addEventListener('blur', () => drawCurve());
   curve.addEventListener('dblclick', e => {
     if (set.eqMode !== 'parametric' || !curve.map || hitBand(e, 14) >= 0) return;
     const m = curve.map, r = curve.getBoundingClientRect();
@@ -271,10 +306,12 @@ function eqTab(content) {
   content.append(
     h('div', { class: 'toolbar flush' }, tgBtn('Equ', 'eqOn', applyEq), tgBtn('Tone', 'toneOn', applyTone), tgBtn('Limit', 'limiter', () => { engine.setLimiter(set.limiter); saveSettings(); }), seg, bandsSel, h('span', { class: 'tb-spacer' }), presetBtn),
     curveBox, out, body);
-  let raf, tm;
+  let raf, tm, last = 0;
   const loop = () => {
     if (document.hidden || !engine.playing) tm = setTimeout(loop, 250); else raf = requestAnimationFrame(loop); // idle: no 60 fps loop
-    if (!document.hidden) drawCurve();
+    const now = performance.now();
+    if (document.hidden || (engine.playing && !drag && now - last < 33)) return; // ~30 fps while playing, full rate while dragging (paused: the 250 ms idle loop)
+    last = now; drawCurve();
   };
   loop();
   onTeardown(() => { cancelAnimationFrame(raf); clearTimeout(tm); });

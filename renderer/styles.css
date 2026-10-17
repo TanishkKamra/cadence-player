@@ -1153,3 +1153,130 @@ body.side-compact .side-pill { border-radius: 50%; }
 body.side-compact .side-sep { align-self: center; width: 24px; margin: 6px 0; }
 #side-toggle[aria-pressed="true"] { color: rgb(var(--accent)); }
 @media (max-width: 1100px) { #side-toggle { display: none; } } /* the rail is forced there */
+
+/* ================================================================ v0.8 ui-master review (approved findings A, B, C) */
+/* motion scale: three durations next to the house springs; feedback answers fast, panels medium, hero moments slow */
+:root { --t-fast: 140ms; --t-med: 280ms; --t-slow: 520ms; }
+.search, .eq-tabs button, .switch, .tb-filter { transition-duration: var(--t-med); }
+.switch::after { transition: transform var(--spring-snappy-dur, .35s) var(--spring-snappy, var(--ease-out)); }
+
+/* A1 marquee: the text rests fully visible; the left fade lives in a gutter outside the text */
+.chip.scrolling { padding-left: 12px; margin-left: -12px; max-width: calc(100% + 12px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 16px), transparent); }
+@keyframes marquee { 0%, 12% { transform: translateX(0); } 88%, 100% { transform: translateX(calc(var(--mq) - 12px)); } }
+
+/* A2 light theme: glass transport discs (only Play stays solid), stronger secondary text, legible category marks */
+body[data-theme="light"] { --text-2: rgb(0 0 0 / .68); --text-3: rgb(0 0 0 / .6); }
+body[data-theme="light"] .t-btn:not(.l) { background: linear-gradient(180deg, #fff, #eeebe7); color: #17161a; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08), inset 0 1px 0 #fff, 0 14px 26px -16px rgb(40 30 20 / .45); }
+body[data-theme="light"] .t-btn:not(.l):hover { background: #fff; }
+body[data-theme="light"] .cat { background: radial-gradient(120% 120% at 30% 20%, color-mix(in srgb, var(--c) 92%, #fff), color-mix(in srgb, var(--c) 72%, #000) 80%); color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), 0 2px 6px -2px color-mix(in srgb, var(--c) 60%, transparent); }
+body[data-theme="light"] .side-item .count, body[data-theme="light"] .side-h, body[data-theme="light"] .side-h button { color: #4a4643; }
+body[data-theme="light"] .seek .track { background: rgb(0 0 0 / .05); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08); }
+
+/* A4 compact sidebar: the page keeps its final width while the column moves (no relayout per frame) */
+#main.freeze > .view { right: auto; width: var(--freeze-w); }
+
+/* A6 focus: every control shows a ring, including menus, pickers and text fields; row actions appear when tabbed to */
+:focus-visible { outline-color: color-mix(in srgb, rgb(var(--accent)) 70%, #fff); }
+body[data-theme="light"] :focus-visible { outline-color: color-mix(in srgb, rgb(var(--accent)) 65%, #000); }
+:is(select, textarea, input:not(.search input), .dropdown, .tb-select, .set-text, .set-search, .pb-search, .tb-filter):focus-visible { outline: 2px solid color-mix(in srgb, rgb(var(--accent)) 70%, #fff); outline-offset: 2px; }
+.menu button:focus-visible { outline: 2px solid color-mix(in srgb, rgb(var(--accent)) 70%, #fff); outline-offset: -2px; background: var(--surface-2); }
+.row:focus-within :is(.like, .more), .qrow:focus-within .x { opacity: 1; }
+
+/* A9 A–Z rail: 24px targets, letters without items are hidden; on a short list the rail scrolls instead of shrinking */
+.az { gap: 0; max-height: calc(100% - 12px); overflow-y: auto; scrollbar-width: none; }
+.az::-webkit-scrollbar { width: 0; }
+.az button { width: 24px; height: 24px; line-height: 24px; flex: none; }
+.az button.empty { display: none; }
+
+/* A12 reduced motion: loops stop instead of restarting every frame */
+@media (prefers-reduced-motion: reduce) { .mq, .bg-layer, .eq-bars i, .ly-loading i { animation: none !important; } }
+
+/* A13 sidebar: a soft shade at the bottom says "more below" and clears when the end is reached */
+#sidebar::after { content: ""; position: sticky; bottom: -18px; flex: none; align-self: stretch; height: 40px; margin: -40px -8px -18px; z-index: 2; pointer-events: none;
+  border-radius: 0 0 var(--r-xl, 30px) var(--r-xl, 30px); background: linear-gradient(transparent, rgb(6 6 8 / .6)); opacity: 0;
+  animation: side-more linear both; animation-timeline: scroll(self); }
+body[data-theme="light"] #sidebar::after { background: linear-gradient(transparent, rgb(255 255 255 / .75)); }
+body.side-compact #sidebar::after { margin: -40px 0 -14px; bottom: -14px; border-radius: 0 0 999px 999px; }
+@keyframes side-more { from, 92% { opacity: 1; } to { opacity: 0; } }
+
+/* B1 Now Playing without a lyrics column: cover, title and the lyrics note become one centred column */
+.npv:has(> .lyrics-view.ly-sparse) { flex-direction: column; justify-content: safe center; align-items: center; overflow: hidden auto; }
+.npv { overflow: hidden; }
+.npv .ly-sparse .empty.none { display: none; } /* Now Playing already says it */
+.npv:has(> .ly-sparse) .npv-left { flex: none; width: 100%; padding: 12px 40px 0; }
+.npv:has(> .ly-sparse) .npv-art { width: min(100%, calc(100vh - 340px), 540px); min-width: 180px; }
+.npv > .lyrics-view.ly-sparse { flex: none; width: 100%; max-width: 640px; }
+.npv .ly-sparse .ly-scroll { overflow: visible; flex: none; padding: 6px 24px 24px; -webkit-mask-image: none; mask-image: none; text-align: center; }
+.npv .ly-sparse .ly-line { font-size: 15px; font-weight: 520; letter-spacing: 0; line-height: 1.4; margin: 0 0 2px; color: var(--text-2); transform: none; filter: none; text-shadow: none; }
+.npv .ly-sparse .ly-source { text-align: center; margin-top: 4px; font-size: 11px; }
+.npv .ly-sparse .empty { padding: 6px 0 0; gap: 8px; }
+.npv .ly-sparse .empty h2 { font-size: 15px; font-weight: 560; letter-spacing: 0; color: var(--text-2); }
+.npv .ly-sparse .ly-loading { padding-top: 6px; }
+
+/* B3 one audio-format chip everywhere */
+.npv-q { margin-top: 8px; padding: 4px 10px; border-radius: 999px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: none; color: var(--text-2); background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--hair); }
+body[data-theme="light"] .npv-q { background: rgb(255 255 255 / .6); }
+
+/* B4 player: times and the queue chip on one baseline grid */
+.times { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+.times .ctx { justify-self: center; max-width: 100%; }
+
+/* B5 cover buttons step back until the cover is pointed at or focused (liked / has-lyrics states stay) */
+@media (hover: hover) {
+  #player .np-art .ov > * { transition: opacity var(--t-med) ease-out; }
+  #player .np-art:not(:hover, :focus-within) .ov > :not(.on):not(.has) { opacity: 0; }
+}
+
+/* C1 track change: the new cover settles in over the old one (scale + fade, no blur); text rises in from JS */
+@keyframes art-in { from { transform: translateX(3%) scale(1.07); opacity: 0; } }
+@keyframes art-out { to { transform: translateX(-2%) scale(.95); opacity: 0; } }
+@keyframes art-in-back { from { transform: translateX(-3%) scale(1.07); opacity: 0; } }
+@keyframes art-out-back { to { transform: translateX(2%) scale(.95); opacity: 0; } }
+.np-art img.enter { animation: art-in var(--spring-smooth-dur, .8s) var(--spring-smooth, var(--ease)) both; }
+.np-art img.leave { animation: art-out .45s var(--ease) both; }
+
+/* C2 stage: the cover's colour blooms behind Now Playing. Static on purpose: a drift loop cost ~4% CPU while playing */
+/* sized to the view (inset 0), so it never adds scrollable overflow */
+.npv > .npv-glow { position: absolute; inset: 0; z-index: 0; pointer-events: none; --gx: 26%;
+  background: radial-gradient(55vh circle at var(--gx) 48%, rgb(var(--accent) / .26), rgb(var(--accent) / .08) 55%, transparent); }
+.npv:has(> .ly-sparse) > .npv-glow { --gx: 50%; }
+.npv > * { position: relative; z-index: 1; }
+.npv > .npv-glow { position: absolute; }
+body[data-theme="light"] .npv > .npv-glow { background: radial-gradient(55vh circle at var(--gx) 48%, rgb(var(--accent) / .22), transparent); }
+
+/* C3 headers: mono eyebrow, a bigger display title, the collection's cover as a soft wash behind it */
+.view-title .kicker { font-family: var(--mono); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
+.view-title h1 { font-size: clamp(34px, 2.8vw + 12px, 60px); letter-spacing: -.04em; }
+.view-head { position: relative; isolation: isolate; }
+.view-head.washed::before { content: ""; position: absolute; inset: -46px -24px -40px; z-index: -1; pointer-events: none;
+  background: var(--head-art) center / cover; filter: blur(50px) saturate(1.5); opacity: .45;
+  -webkit-mask-image: radial-gradient(75% 95% at 18% 35%, #000, transparent 78%); mask-image: radial-gradient(75% 95% at 18% 35%, #000, transparent 78%); }
+body[data-theme="light"] .view-head.washed::before { opacity: .3; }
+
+/* C4 grid: cards arrive in a quick stagger; hover lifts the tray, zooms the art inside its frame and springs the play button in */
+.reveal { transition: opacity var(--t-slow) var(--ease), transform var(--spring-smooth-dur, .7s) var(--spring-smooth, var(--ease)); transition-delay: calc(var(--i, 0) * 30ms); }
+.card .cover img { transition: object-view-box var(--t-slow) var(--ease); object-view-box: inset(0); }
+.card:hover .cover img { object-view-box: inset(3.5%); }
+.card .play-fab { transition: opacity var(--t-fast) ease-out, transform var(--spring-glide-dur, .45s) var(--spring-glide, var(--ease-out)), background-color var(--t-fast) ease-out; }
+.card:hover .play-fab { transition-delay: 40ms; }
+
+/* C5 transport: one size ladder, and a soft halo lights around Play while music plays */
+.t-btn.m { width: clamp(48px, 14.5cqi, 58px); height: clamp(48px, 14.5cqi, 58px); } .t-btn.m .ic { width: clamp(21px, 6.2cqi, 25px); height: clamp(21px, 6.2cqi, 25px); }
+.t-btn.s { width: clamp(38px, 11cqi, 46px); height: clamp(38px, 11cqi, 46px); } .t-btn.s .ic { width: clamp(17px, 4.8cqi, 19px); height: clamp(17px, 4.8cqi, 19px); }
+.t-btn.l { position: relative; }
+.t-btn.l::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; pointer-events: none; opacity: 0; transform: scale(.92);
+  box-shadow: 0 0 0 1px rgb(var(--accent) / .5), 0 0 28px rgb(var(--accent) / .4); transition: opacity var(--t-slow) var(--ease), transform var(--t-slow) var(--ease); }
+body:not(.paused) #player .t-btn.l::after { opacity: 1; transform: none; } /* static: a looping halo here was not composited (~20% CPU) */
+
+/* C6 machined depth: cover trays pick up the album tint at the rim and sit on a contact shadow */
+.np-art, .npv-art, .view-head .art { box-shadow: inset 0 0 0 1px rgb(var(--accent) / .18), inset 0 1px 0 rgb(255 255 255 / .08), 0 2px 4px rgb(0 0 0 / .25), 0 40px 80px -36px rgb(0 0 0 / .8), 0 0 90px -30px rgb(var(--accent) / .5); }
+body[data-theme="light"] :is(.np-art, .npv-art, .view-head .art) { box-shadow: inset 0 0 0 1px rgb(var(--accent) / .22), inset 0 1px 0 #fff, 0 2px 4px rgb(40 30 20 / .12), 0 30px 60px -30px rgb(40 30 20 / .35); }
+.set-group, .fx-card, .pband, .eq-curve, .eq-sliders { box-shadow: inset 0 0 0 1px var(--hair), var(--hi), 0 0 0 6px var(--shell), 0 0 0 7px rgb(var(--accent) / .07); }
+
+/* C7 EQ faceplate: the curve sits in a recessed channel, knobs are machined, an "on" effect carries a lit dot */
+.eq-curve { background: radial-gradient(120% 90% at 50% 0%, rgb(var(--accent) / .07), transparent 60%), linear-gradient(180deg, rgb(0 0 0 / .38), rgb(0 0 0 / .2));
+  box-shadow: inset 0 2px 16px rgb(0 0 0 / .6), inset 0 0 0 1px var(--hair), 0 0 0 6px var(--shell), 0 0 0 7px rgb(var(--accent) / .07); }
+body[data-theme="light"] .eq-curve { box-shadow: inset 0 2px 10px rgb(40 30 20 / .12), inset 0 0 0 1px var(--hair), 0 0 0 6px var(--shell), 0 0 0 7px rgb(var(--accent) / .1); }
+.knob .dial { border-radius: 50%; box-shadow: 0 12px 24px -12px rgb(0 0 0 / .8), 0 0 0 5px rgb(255 255 255 / .02); }
+.toggle-btn.on::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; vertical-align: 1px; background: rgb(var(--accent)); box-shadow: 0 0 8px rgb(var(--accent)); }

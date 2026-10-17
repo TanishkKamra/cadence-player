@@ -22,17 +22,23 @@ hooks.toast = toast;
 // ---------- theme ----------
 // compact sidebar: the icon rail, chosen in the titlebar or forced by a narrow window
 const narrow = matchMedia('(max-width: 1100px)');
+let sideAnim = null;
 function applySideCompact(animate) {
   const on = !!set.sideCompact || narrow.matches, app = $('#app'), b = document.body;
   if (b.classList.contains('side-compact') === on) return;
   const from = getComputedStyle(app).gridTemplateColumns;
   b.classList.toggle('side-compact', on);
-  const t = $('#side-toggle'); t.setAttribute('aria-pressed', String(on)); t.title = on ? 'Expand sidebar' : 'Compact sidebar';
+  const t = $('#side-toggle'); t.setAttribute('aria-pressed', String(on)); t.title = on ? 'Expand sidebar' : 'Compact sidebar'; t.setAttribute('aria-label', t.title);
   const to = getComputedStyle(app).gridTemplateColumns;
   renderSidebar();
-  const a = animate && !b.classList.contains('anim-off') && !matchMedia('(prefers-reduced-motion: reduce)').matches
+  sideAnim?.cancel(); // a quick second toggle restarts from where the column is now
+  const a = sideAnim = animate && !b.classList.contains('anim-off') && !matchMedia('(prefers-reduced-motion: reduce)').matches
     && app.animate([{ gridTemplateColumns: from }, { gridTemplateColumns: to }], { duration: 420, easing: 'cubic-bezier(.32,.72,0,1)' });
-  if (a) a.finished.then(() => renderSidebar(), () => {});
+  // the page is laid out once at its final width and only clipped while the column moves, so frames stay cheap
+  const main = $('#main'), w = parseFloat(to.split(' ')[1]) - 4;
+  if (a && w > 0) { main.style.setProperty('--freeze-w', w + 'px'); main.classList.add('freeze'); }
+  const done = () => { if (sideAnim !== a) return; sideAnim = null; main.classList.remove('freeze'); }; // only the latest toggle unfreezes
+  if (a) a.finished.then(() => { done(); renderSidebar(); }, done);
 }
 export function applyTheme() {
   const b = document.body, r = document.documentElement.style;
