@@ -31,6 +31,10 @@ for (const f of ['\\??\\UNC\\nas\\music\\a.flac', '\\\\?\\UNC\\nas\\music\\a.fla
   assert.equal(netOk(f, share), true, f);
 for (const f of ['\\??\\UNC\\attacker\\music\\a.flac', '\\\\?\\UNC\\attacker\\s\\x', '\\\\.\\UNC\\nas\\other\\x', '\\\\?\\GLOBALROOT\\Device\\Mup\\nas\\music\\a.flac'])
   assert.equal(netOk(f, share), false, f);
+// ...but never with '.' or '..' segments: Windows lets them climb out of \\.\UNC\server\share, Node does not
+for (const f of ['\\\\.\\UNC\\nas\\music\\..\\..\\attacker\\s\\x.flac', '\\\\?\\UNC\\nas\\music\\..\\x.flac', '\\??\\UNC\\nas\\music\\.\\a.flac', '//./UNC/nas/music/../../attacker/s'])
+  assert.equal(netOk(f, share), false, f);
+assert.equal(netOk('\\\\nas\\music\\..\\x.flac', share), true); // a plain UNC root cannot be climbed out of, here Windows and Node agree
 // long forms of a local drive path are local
 assert.equal(netOk('\\\\?\\C:\\x.flac', local), true);
 assert.equal(netOk('\\??\\D:\\Lossless music\\a.flac', local), true);

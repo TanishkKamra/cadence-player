@@ -29,7 +29,11 @@ const num = (v, lo, hi, d) => typeof v === 'number' && Number.isFinite(v) ? Math
 const under = (f, d) => { const r = path.relative(d, f); return !!r && !r.startsWith('..') && !path.isAbsolute(r); };
 // UNC/device/NT paths (\\host\share, //host, \\?\, \\.\, \??\) make Windows send NTLM credentials to the host: anything but X:\... must sit inside a library folder that is itself a share
 // long forms of a drive or share path compare as their plain form (\\?\UNC\nas\m -> \\nas\m, \\?\D:\ -> D:\); other device paths (\\?\GLOBALROOT, \\.\pipe) stay "network"
-const plainPath = f => f.replace(/^[\\/]{2}[?.][\\/]UNC[\\/]|^\\\?\?\\UNC\\/i, '\\\\').replace(/^(?:[\\/]{2}[?.]|\\\?\?)[\\/](?=[a-z]:[\\/])/i, '');
+// a long form may not carry '.' or '..' segments: Windows resolves them in \\.\UNC\ paths past the server and share, Node keeps \\server\share as the root
+const plainPath = f => {
+  const g = f.replace(/^[\\/]{2}[?.][\\/]UNC[\\/]|^\\\?\?\\UNC\\/i, '\\\\').replace(/^(?:[\\/]{2}[?.]|\\\?\?)[\\/](?=[a-z]:[\\/])/i, '');
+  return g !== f && /(^|[\\/])\.\.?([\\/]|$)/.test(g) ? '\\\\?\\refused' : g;
+};
 const netPath = f => !/^[a-z]:[\\/]/i.test(f);
 const netOk = (f, folders = library.folders) => { const g = plainPath(f); return !netPath(g) || folders.some(d => netPath(d) && under(g, d)); };
 // Windows follows local-to-remote symlinks by default, so a link in a music folder could still reach another host. lstat/readlink read only the
