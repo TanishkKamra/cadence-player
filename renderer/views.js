@@ -1,7 +1,7 @@
 // Sidebar, navigation and library views.
 import { h, $, icon, fmtTime, fmtLong, artUrl, splitNames, plural, fmtQualityShort, fmtQuality } from './util.js';
 import { S, set, engine, hooks, smartList, plTracks as plTracksRaw, saveSettings, savePlaylists, dirOf, base, searchMatch, titleOf, artistOf, streamTrack, fileOf } from './core.js';
-import { trackList, grid, azRail, letterOf, ROW_H, toast, menu, cta, observeReveals, dropdown } from './ui.js';
+import { trackList, grid, azRail, glideTo, letterOf, ROW_H, toast, menu, cta, observeReveals, dropdown } from './ui.js';
 import { playList, enqueueUI, playlistMenu, newPlaylist, importPlaylists, addToPlaylist, addStream, playStream, openBookmark, trackMenu, downloadArt } from './actions.js';
 import { lyricsView } from './lyricsview.js';
 import { spring, fade, flip, motionOff } from './motion.js';
@@ -229,7 +229,11 @@ function gridView(cat, title, items, opts) {
   const viewBtn = h('button', { class: 'tb-btn', title: asList ? 'Grid view' : 'List view', onclick: () => { set.grid[cat] = asList; saveSettings(); render('swap'); } }, icon(asList ? 'grid' : 'lyrics'));
   const v = h('section', { class: 'view' }, viewHead({ cat, title, sub: plural(items.length, 'item') }),
     toolbar(() => items.flatMap(i => i.tracks), { label: title, view: { name: cat } }, { onFilter: draw, extra: [h('span', { class: 'tb-spacer' }), ...(opts.extra || []), viewBtn] }), scroll);
-  if (opts.az && items.length > 20) v.append(azRail((l, drag) => scroll.querySelector(`[data-letter="${l}"]`)?.scrollIntoView({ block: 'start', behavior: drag ? 'auto' : 'smooth' }),
+  if (opts.az && items.length > 20) v.append(azRail(l => {
+    const c = scroll.querySelector(`[data-letter="${l}"]`), g = c?.parentElement;
+    // measured from the grid (cards may still carry their reveal offset): grid top + the card's layout offset inside it
+    if (c) glideTo(scroll, g.getBoundingClientRect().top + c.offsetTop - g.offsetTop - scroll.getBoundingClientRect().top + scroll.scrollTop);
+  },
     new Set(items.map(i => letterOf(i.name)))));
   return v;
 }

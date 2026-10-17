@@ -2,6 +2,7 @@
 import { h, $, icon, fmtTime, fmtQuality, fmtQualityShort, isHiRes, artUrl, norm } from './util.js';
 import { S, set, engine, rating, titleOf, artistOf, plTracks } from './core.js';
 import { onTeardown, heroFrom } from './views.js';
+import { motionOff } from './motion.js';
 import { trackMenu, rate, playFrom, movePlaylistItem, removeFromPlaylist } from './actions.js';
 
 // ---------- menus ----------
@@ -327,6 +328,7 @@ export function trackList(tracks, { ctx, numbered = 'index', playlist = null, so
     return r;
   };
   const scroller = () => inline ? wrap.closest('.scroll') : wrap;
+  let built = new Map(); // index -> row element of the last draw
   const draw = force => {
     const sc = scroller();
     if (!sc) return;
@@ -335,8 +337,10 @@ export function trackList(tracks, { ctx, numbered = 'index', playlist = null, so
     const a = Math.max(0, Math.floor(top / ROW_H) - 8), b = Math.min(tracks.length, Math.ceil((top + hh) / ROW_H) + 8);
     if (!force && a === first && b === last) return;
     first = a; last = b;
-    const rows = [];
-    for (let i = a; i < b; i++) rows.push(rowFor(tracks[i], i));
+    // rows still in view are reused (fast scrolls and A-Z glides only build the ones coming in); a forced draw rebuilds all
+    const keep = force ? new Map() : built, rows = [];
+    built = new Map();
+    for (let i = a; i < b; i++) { const r = keep.get(i) || rowFor(tracks[i], i); built.set(i, r); rows.push(r); }
     inner.replaceChildren(...rows);
   };
   const select = (i, e) => {
@@ -385,13 +389,37 @@ export function trackList(tracks, { ctx, numbered = 'index', playlist = null, so
     sb('Title', 'title'), h('span', { class: 'c-album' }, sb('Album', 'album')), h('span', { class: 'c-q' }, 'Quality'), h('span', { class: 'r' }, sb('Time', 'duration')), h('span'), h('span'));
   if (inline) { inner.style.position = 'relative'; return h('div', { class: 'inline-list' }, head, wrap); }
   const box = h('div', { class: 'list-box' }, head, wrap);
-  if (az) box.append(azRail(letter => { const i = tracks.findIndex(t => letterOf(titleOf(t)) === letter); if (i >= 0) wrap.scrollToIndex(i); }, new Set(tracks.map(t => letterOf(titleOf(t))))));
+  if (az) box.append(azRail(letter => { const i = tracks.findIndex(t => letterOf(titleOf(t)) === letter); if (i >= 0) glideTo(scroller(), topOf() + i * ROW_H); }, new Set(tracks.map(t => letterOf(titleOf(t))))));
   box.list = wrap;
   return box;
 }
 export function refreshLists() { document.querySelectorAll('.vlist').forEach(v => v.refresh?.()); }
 
 export const letterOf = s => { const c = norm(s).trim()[0] || '#'; return /[a-z]/.test(c) ? c.toUpperCase() : /[0-9]/.test(c) ? '0' : '#'; };
+// scroll that chases a moving target (the A–Z scrub): every frame it closes a share of the remaining distance, so the
+// list glides and simply re-aims when the target changes mid-flight; a wheel turn hands control back at once
+const glides = new WeakMap();
+export function glideTo(el, top) {
+  if (!el) return;
+  top = Math.max(0, Math.min(top, el.scrollHeight - el.clientHeight));
+  if (motionOff()) { el.scrollTop = top; return; }
+  const cur = glides.get(el);
+  if (cur) { cur.top = top; return; }
+  const g = { top, last: performance.now() };
+  glides.set(el, g);
+  el.addEventListener('wheel', () => glides.delete(el), { once: true, passive: true });
+  const step = now => {
+    if (glides.get(el) !== g) return;
+    const dt = Math.min(64, now - g.last), d = g.top - el.scrollTop;
+    g.last = now;
+    if (Math.abs(d) < 1) { el.scrollTop = g.top; glides.delete(el); return; }
+    const move = d * (1 - Math.exp(-dt / 100)); // ~100 ms time constant: quick, never a jump
+    el.scrollTop += Math.abs(move) < 1 ? Math.sign(d) : move;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 export function azRail(onPick, has) { // has: optional Set of letters with items; others render disabled
   const btns = ['0', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'].map(l => has && !has.has(l)
     ? h('button', { class: 'empty', 'aria-disabled': 'true', tabindex: '-1' }, l)

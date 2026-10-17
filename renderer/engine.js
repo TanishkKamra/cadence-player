@@ -119,6 +119,10 @@ export class Engine extends EventTarget {
     // exclusive (bit-perfect) output: main process + WASAPI helper stand in for the worklet, same messages
     this.xoPort = { postMessage: m => api.send('xo:msg', m) };
     api.on('xo:msg', m => this.onXo(m));
+    // device volume (like a phone): null = unavailable, else whether the device has a real hardware volume control
+    this.hwVol = null;
+    api.on('hwvol', m => this.onHwVol(m));
+    this.hwDevice();
   }
 
   emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
@@ -213,14 +217,20 @@ export class Engine extends EventTarget {
       const gone = this.eq.splice(this.o.eqBands.length);
       this.link(); gone.forEach(f => f.dispose());
     }, 200);
-    this.preamp.gain.setTargetAtTime(on ? dbToGain(preamp) : 1, t, 0.02);
+    this.headroom();
     this.regain();
   }
   setTone(on, bass, treble, bassFreq = this.o.bassFreq || 90, trebleFreq = this.o.trebleFreq || 9000) {
     Object.assign(this.o, { toneOn: on, bass, treble, bassFreq, trebleFreq });
     this.bass.set({ type: 'lowshelf', freq: bassFreq, q: 0.7 }, on ? bass : 0);
     this.treble.set({ type: 'highshelf', freq: trebleFreq, q: 0.7 }, on ? treble : 0);
+    this.headroom();
     this.regain();
+  }
+  // EQ, tone and preamp boosts are offset before they happen, so a full-scale track never reaches the limiter however loud
+  // the output is: loudness comes from the device volume, not from pushing the signal past 0 dBFS
+  headroom() {
+    this.preamp.gain.setTargetAtTime(dbToGain((this.o.eqOn ? this.o.preamp || 0 : 0) - this.boostDb()), this.ctx.currentTime, 0.02);
   }
   setBalance(v) { this.o.balance = v; this.balance.pan.setTargetAtTime(v, this.ctx.currentTime, 0.02); }
   setWidth(v) { this.o.width = v; if (!this.o.exclusive) this.port.postMessage({ type: 'width', value: v }); }
@@ -262,10 +272,28 @@ export class Engine extends EventTarget {
     this.volume.disconnect(); this.limiter.disconnect(); this.limPost.disconnect(); this.ceil.disconnect();
     if (on) this.volume.connect(this.limiter).connect(this.limPost).connect(this.ceil).connect(this.ctx.destination); else this.volume.connect(this.ctx.destination);
   }
-  setVolume(v) {
+  setVolume(v, fromDevice = false) {
     v = clamp(v, 0, 1, 0);
-    this.o.volume = v; this.volume.gain.setTargetAtTime(v * v, this.ctx.currentTime, 0.015);
-    if (this.o.exclusive) this.port.postMessage({ type: 'volume', value: v * v }); // < 100% scales samples: not bit-perfect
+    this.o.volume = v;
+    // exclusive mode bypasses Windows' software volume, so there only a real hardware control can stand in
+    const dev = this.hwVol != null && (this.hwVol || !this.o.exclusive);
+    const g = dev ? 1 : v * v;
+    this.volume.gain.setTargetAtTime(g, this.ctx.currentTime, 0.015);
+    if (this.o.exclusive) this.port.postMessage({ type: 'volume', value: g }); // < 1 scales samples: not bit-perfect
+    if (dev && !fromDevice) api.send('hwvol:set', v);
+  }
+  async deviceLabel() {
+    const d = this.o.device && (await navigator.mediaDevices.enumerateDevices()).find(d => d.kind === 'audiooutput' && d.deviceId === this.o.device);
+    return d?.label || '';
+  }
+  async hwDevice() { api.send('hwvol:dev', await this.deviceLabel()); }
+  // the device's volume is the truth: changes made with the keyboard, Windows or another app show up on the slider
+  onHwVol(m) {
+    const before = this.o.volume;
+    this.hwVol = m.type === 'vol' ? !!m.hw : null;
+    const v = m.type === 'vol' ? (m.muted ? 0 : m.v) : before;
+    if (this.volume) this.setVolume(v, true); else this.o.volume = v; // the chain is not built yet: init() applies it
+    if (Math.abs(v - before) > 0.004) this.emit('volume', v);
   }
   setCrossfade(sec) {
     this.o.crossfade = sec;
@@ -287,6 +315,7 @@ export class Engine extends EventTarget {
     sampleRate = okRate(sampleRate);
     const changedRate = sampleRate !== (this.o.sampleRate || 0);
     Object.assign(this.o, { device, sampleRate });
+    this.hwDevice();
     if (this.o.exclusive && !changedRate) return this.setExclusive(true); // reopens the helper on the new device
     if (!changedRate) return this.ctx.setSinkId(device || '').catch(e => this.emit('error', { message: 'Output device: ' + e.message }));
     const resume = this.cur && { entry: this.cur.entry, start: this.position, play: this.playing, quiet: true };
@@ -310,8 +339,7 @@ export class Engine extends EventTarget {
     if (resume) this.load(resume.entry, resume);
   }
   async xoConfig() {
-    const d = this.o.device && (await navigator.mediaDevices.enumerateDevices()).find(d => d.kind === 'audiooutput' && d.deviceId === this.o.device);
-    this.port.postMessage({ type: 'config', device: d?.label || '' }); // the helper matches the endpoint by name
+    this.port.postMessage({ type: 'config', device: await this.deviceLabel() }); // the helper matches the endpoint by name
   }
   onXo(m) {
     if (!this.o.exclusive) return;
@@ -354,7 +382,7 @@ export class Engine extends EventTarget {
     if (db == null) return dbToGain(clamp(o.noRgPreamp, -24, 24, 0));
     let gain = dbToGain(clamp(db, -24, 24, 0) + clamp(o.rgPreamp, -24, 24, 0));
     const peak = useAlbum ? rg.ap : rg.tp;
-    if (o.preventClip && peak > 0) gain = Math.min(gain, 1 / (peak * dbToGain(this.boostDb())));
+    if (o.preventClip && peak > 0) gain = Math.min(gain, 1 / peak); // EQ boosts are already offset by headroom()
     return gain;
   }
   // worst-case positive gain the EQ / tone / preamp can add downstream of the per-stream gain

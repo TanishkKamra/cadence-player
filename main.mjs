@@ -201,7 +201,7 @@ if (gotLock) app.whenReady().then(() => {
   // incremental scan on startup picks up changes made while the app was closed
   if (library.folders.length) win.webContents.once('did-finish-load', () => setTimeout(() => scan(), 1500));
 });
-app.on('before-quit', () => { killDecoders(); flush(); });
+app.on('before-quit', () => { killDecoders(); hwv?.kill(); flush(); });
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', flush);
 
@@ -626,6 +626,35 @@ on('xo:msg', (e, m) => {
   xo ||= new Exclusive({ spawn: dev => spawn(WASAPI, [dev], { windowsHide: true }), send: msg => safeSend(e.sender, 'xo:msg', msg), ack });
   xo.msg(m);
 });
+
+// device volume: the slider drives the output device's own volume through the helper's --volume mode (native/wasapi.cs)
+let hwv = null, hwvTo = null;
+const hwvSend = m => { if (hwvTo) safeSend(hwvTo, 'hwvol', m); };
+function hwvHelper() {
+  if (hwv) return hwv;
+  const p = hwv = spawn(WASAPI, ['--volume'], { windowsHide: true });
+  let buf = '';
+  p.stdout.on('data', b => {
+    buf += b;
+    for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) {
+      const l = buf.slice(0, i).trim(), w = l.split(' ');
+      if (w[0] === 'vol') hwvSend({ type: 'vol', v: num(+w[1], 0, 1, 0), muted: w[2] === '1', hw: w[3] === '1' });
+      else if (w[0] === 'none') hwvSend({ type: 'none', message: l.slice(5) });
+    }
+  });
+  p.stdin.on('error', () => {});
+  p.on('error', () => {});
+  p.on('exit', () => { if (hwv === p) { hwv = null; hwvSend({ type: 'none', message: 'volume helper stopped' }); } });
+  return p;
+}
+on('hwvol:dev', (e, name) => {
+  if (typeof name !== 'string' || name.length > 512 || /[\r\n\0]/.test(name)) return;
+  hwvTo = e.sender;
+  // a muted (test) instance has nothing to make louder: leave the real device volume alone
+  if (app.commandLine.hasSwitch('mute-audio')) return hwvSend({ type: 'none', message: 'muted instance' });
+  hwvHelper().stdin.write('dev ' + name + '\n');
+});
+on('hwvol:set', (e, v) => { if (typeof v === 'number' && Number.isFinite(v)) hwv?.stdin.write('set ' + Math.min(1, Math.max(0, v)).toFixed(4) + '\n'); });
 
 on('dec:start', (e, a) => {
   if (!isObj(a)) return;
