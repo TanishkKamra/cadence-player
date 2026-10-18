@@ -5,13 +5,12 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
 import { parseFile } from 'music-metadata';
 import { Exclusive } from './exclusive.mjs';
 
-const require = createRequire(import.meta.url);
-const FFMPEG = (require('ffmpeg-static') || '').replace('app.asar', 'app.asar.unpacked');
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+// libsoxr-capable build fetched by tools/get-ffmpeg.mjs (ffmpeg-static has no soxr)
+const FFMPEG = path.join(ROOT, 'native', 'ffmpeg', 'ffmpeg.exe').replace('app.asar', 'app.asar.unpacked');
 const WASAPI = path.join(ROOT, 'native', 'cadence-wasapi.exe').replace('app.asar', 'app.asar.unpacked');
 const DATA = app.getPath('userData');
 const COVERS = path.join(DATA, 'covers');
@@ -642,8 +641,10 @@ on('dec:start', (e, a) => {
   if (prev) { decoders.delete(id); prev.proc.kill(); } // same id restarted: don't leak the old ffmpeg
   if (exclusive) xo?.open(id, rate, bits);
   // resample to the output rate first, then pitch (asetrate) + tempo compensation so duration only follows `tempo`
-  const af = [`aresample=${rate}:filter_size=64:cutoff=0.98`];
-  if (Math.abs(pitch - 1) > 1e-4) af.push(`asetrate=${Math.round(rate * pitch)}`, `aresample=${rate}:filter_size=64`);
+  // SoX very-high-quality resampler (28-bit precision, flat passband to 95% of Nyquist): images/aliases stay near -165 dB
+  const rs = `aresample=${rate}:resampler=soxr:precision=28:cheby=1:cutoff=0.95`;
+  const af = [rs];
+  if (Math.abs(pitch - 1) > 1e-4) af.push(`asetrate=${Math.round(rate * pitch)}`, rs);
   af.push(...atempoChain(tempo / pitch));
   // 16-bit device fed from a deeper source: TPDF dither at the 16-bit step (the s16 result widens to s32 exactly)
   const xaf = [...(resample ? [af[0]] : []), ...(exclusive && bits && bits <= 16 && bits < srcBits ? ['aresample=osf=s16:dither_method=triangular'] : [])];

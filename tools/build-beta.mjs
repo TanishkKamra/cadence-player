@@ -9,7 +9,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const [appPath] = await packager({
   dir: root, name: 'Cadence Beta', platform: 'win32', arch: 'x64', icon: path.join(root, 'build/icon.ico'),
   out: path.join(root, 'release-beta'), overwrite: true, appCopyright: 'Cadence',
-  asar: { unpack: '**/{ffmpeg-static/ffmpeg.exe,native/cadence-wasapi.exe}' },
+  asar: { unpack: '**/{native/ffmpeg/ffmpeg.exe,native/cadence-wasapi.exe}' },
   ignore: /^\/(test|release|release-beta|dist|tools|scratch|import|[.]git|[.]vscode)(\/|$)|^\/(README[.]md|package-lock[.]json|[.]gitignore)$|^\/native\/[^/]+[.]cs$|[.](log|bak|bad|tmp|map)$/,
   // the product name decides the data folder (app.getPath('userData')) and the single-instance lock
   sanitizePackageJson: [defaultSanitizePackageJson, pj => ({ ...pj, name: 'cadence-beta', productName: 'Cadence Beta' })],

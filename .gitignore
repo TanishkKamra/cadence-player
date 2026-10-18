@@ -10,3 +10,5 @@ import/
 *.bak
 *.bad
 *.tmp
+# decoder binary, fetched and checksum-verified by tools/get-ffmpeg.mjs
+native/ffmpeg/
