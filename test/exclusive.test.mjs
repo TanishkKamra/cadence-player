@@ -9,7 +9,7 @@ const fake = () => {
   proc = new EventEmitter();
   proc.stdout = new EventEmitter();
   proc.stdin = new EventEmitter();
-  proc.stdin.write = b => { if (b.length === 1 || 'FXKVD'.includes(String.fromCharCode(b[0]))) ops.push(String.fromCharCode(b[0])); };
+  proc.stdin.write = b => { if (b.length === 1 || 'FXKVDGS'.includes(String.fromCharCode(b[0]))) ops.push(String.fromCharCode(b[0])); };
   proc.kill = () => {};
   return proc;
 };
@@ -22,7 +22,7 @@ const last = t => out.filter(m => m.type === t).at(-1);
 xo.open(1, 1000, 24);
 xo.msg({ type: 'playing', value: true });
 xo.msg({ type: 'play', id: 1 });
-assert.deepEqual(ops.slice(0, 4), ['V', 'R', 'X', 'F']);
+assert.deepEqual(ops.slice(0, 5), ['V', 'R', 'X', 'G', 'F']); // each track's gain goes ahead of its format marker
 xo.data(1, pcm(600)); xo.data(1, pcm(400)); xo.end(1);
 assert.equal(xo.written, 1000);
 assert.equal(acks[1], 8000);
@@ -141,5 +141,37 @@ assert.equal(out.filter(m => m.type === 'refused').length, nRefused);
   const n = out.length;
   for (const l of [`pos ${xo.epoch} abc`, 'open x 1 2 3', 'pos 1 2 3 junk-epoch-x']) proc.stdout.emit('data', l + String.fromCharCode(10));
   assert.ok(out.slice(n).every(m => m.type !== 'format' && !(m.type === 'pos' && !Number.isFinite(m.frames))));
+}
+// 64-bit DSP: settings reach the helper (and a respawned one), its state lines come back parsed
+{
+  const o2 = [], w2 = [];
+  const x3 = new Exclusive({ spawn: () => { const p = fake(); const wr = p.stdin.write; p.stdin.write = b => { w2.push(Buffer.from(b)); wr(b); }; return p; }, send: m => o2.push(m), ack() {} });
+  x3.msg({ type: 'dsp', text: 'pre 5.1;band lowshelf 131 5.2 0.97' }); // before any helper: kept for later
+  x3.msg({ type: 'open', id: 1, gain: 1.5 }); x3.open(1, 1000, 24);
+  x3.msg({ type: 'play', id: 1 });
+  const sent = Buffer.concat(w2);
+  assert.ok(sent.includes(Buffer.from('pre 5.1;band lowshelf 131 5.2 0.97')), 'dsp settings sent on spawn');
+  const gAt = sent.indexOf(Buffer.from('G'));
+  assert.ok(gAt >= 0 && Math.abs(sent.readFloatLE(gAt + 5) - 1.5) < 1e-6, 'track gain sent as G');
+  proc.stdout.emit('data', 'dsp 1 -10.63 -41.5 1 10.63\nuvol 0.25\n');
+  assert.deepEqual(o2.find(m => m.type === 'dsp'), { type: 'dsp', active: true, digitalDb: -10.63, dacDb: -41.5, hw: true, boostDb: 10.63 });
+  assert.deepEqual(o2.find(m => m.type === 'uvol'), { type: 'uvol', value: 0.25 });
+  proc.stdout.emit('data', 'dsp 0 -inf - 0 0\n');
+  assert.equal(o2.filter(m => m.type === 'dsp').at(-1).dacDb, null);
+}
+// a stop then a quick play: the new helper starts only once the old one has exited (it restores the DAC volume on exit)
+{
+  let spawns = 0; const o4 = [];
+  const x4 = new Exclusive({ spawn: () => { spawns++; return fake(); }, send: m => o4.push(m), ack() {} });
+  x4.open(1, 1000, 24); x4.msg({ type: 'play', id: 1 });
+  const old = proc;
+  x4.msg({ type: 'stop' });
+  x4.open(2, 1000, 24); x4.msg({ type: 'play', id: 2 });
+  x4.open(3, 1000, 24); x4.msg({ type: 'queue', id: 3 });
+  assert.equal(spawns, 1, 'no second helper while the first is exiting');
+  old.emit('exit', 0);
+  assert.equal(spawns, 2, 'started after the old one exited');
+  assert.equal(x4.segs[0].s.id, 2);
+  assert.equal(x4.next, 3, 'the queue sent while waiting survives');
 }
 console.log('exclusive tests passed');

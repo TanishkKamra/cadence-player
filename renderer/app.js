@@ -402,7 +402,12 @@ async function boot() {
   addEventListener('cadence:xo-reset', () => { xoTry = 0; xoGaveUp = false; });
   eng.addEventListener('track', () => { if (eng.xoFallback && xoTry >= 3) xoRetry(); });
   // the helper opened the device (format reported): the outage is over
-  eng.addEventListener('format', () => { if (xoToasted && set.exclusive) { xoToasted = false; toast('Exclusive output restored'); } });
+  eng.addEventListener('format', () => { if (xoToasted && set.exclusive && eng.outFormat) { xoToasted = false; toast('Exclusive output restored'); } });
+  // exclusive mode: the DAC's own volume was changed (keys, Windows): the slider and the EQ knob follow it
+  eng.addEventListener('volume', e => {
+    set.volume = e.detail; saveSettings();
+    document.dispatchEvent(new Event('cadence:volume')); document.dispatchEvent(new Event('cadence:volume-ui'));
+  });
   api.on('dec:meta', (id, title) => { if (eng.cur?.id === id) { P.streamTitle = title; updatePlayer(); updateMediaSession(); } });
 
   buildPlayer();

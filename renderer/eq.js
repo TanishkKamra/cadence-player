@@ -109,7 +109,7 @@ function eqTab(content) {
   const markCustom = () => { if (set.eqPreset !== 'Custom') { set.eqPreset = 'Custom'; presetBtn.setLabel('Custom'); } };
   const out = h('button', { class: 'eq-info', title: 'Audio info', onclick: audioInfo }, outLabel());
   const updOut = () => { out.textContent = outLabel(); };
-  engine.addEventListener('format', updOut);
+  engine.addEventListener('format', updOut); // also fired when the exclusive DSP / volume state changes
   onTeardown(() => engine.removeEventListener('format', updOut));
   const seg = h('div', { class: 'seg' }, ...['graphic', 'parametric'].map(m => h('button', { class: set.eqMode === m ? 'on' : '', onclick: () => { set.eqMode = m; markCustom(); applyEq(); render('swap'); } }, m === 'graphic' ? 'Graphic' : 'Parametric')));
   const bandsSel = set.eqMode === 'graphic' ? dropdown({ label: 'Number of bands', value: set.graphicBands, options: BAND_COUNTS.map(n => [n, `${n} bands`]),
@@ -367,7 +367,7 @@ function reverbTab(content) {
 function outLabel() {
   const f = engine.outFormat;
   if (!engine.o.exclusive) return `Output · ${engine.ctx.sampleRate / 1000} kHz · 32-bit float`;
-  return f ? `Exclusive · ${f.rate / 1000} kHz · ${f.bits}-bit${engine.bitPerfect ? ' · bit-perfect' : ''}` : 'Exclusive output';
+  return f ? `Exclusive · ${f.rate / 1000} kHz · ${f.bits}-bit · ${engine.bitPerfect ? 'bit-perfect' : '64-bit DSP'}` : 'Exclusive output';
 }
 
 export function audioInfo() {
@@ -387,12 +387,21 @@ export function audioInfo() {
     ['Output', `Web Audio · ${c.sampleRate / 1000} kHz · 32-bit float · ${set.device ? 'selected device' : 'system default device'}`],
     ['Latency', `${Math.round(((c.baseLatency || 0) + (c.outputLatency || 0)) * 1000)} ms output`],
   ];
-  const f = engine.outFormat;
-  if (o.exclusive) rows.splice(1, rows.length - 1,
-    ['Decoder', 'ffmpeg → 32-bit integer PCM at the source rate'],
-    ['Output', f ? `WASAPI exclusive · ${f.rate / 1000} kHz · ${f.bits}-bit in ${f.container}-bit · ${set.device ? 'selected device' : 'system default device'}` : 'WASAPI exclusive · not open yet'],
-    ['Bit-perfect', engine.bitPerfect ? 'Yes' : !f || !t?.sampleRate ? '—' : f.rate !== t.sampleRate ? `No: the device refused ${t.sampleRate / 1000} kHz, resampled to ${f.rate / 1000} kHz` : `No: volume ${Math.round(o.volume * 100)}% scales samples (100% = bit-perfect)`],
-    ['DSP', 'Bypassed (EQ, tone, reverb, limiter, tempo, ReplayGain, crossfade)']);
+  const f = engine.outFormat, xs = engine.xoState, db = v => v == null ? '' : v === -Infinity ? '−∞ dB' : `${v > 0 ? '+' : ''}${(+v).toFixed(1)} dB`;
+  if (o.exclusive) {
+    const resampled = f && t?.sampleRate && f.rate !== t.sampleRate;
+    const why = engine.bitPerfect ? 'Yes' : !f || !xs ? '—' : resampled ? `No: the device refused ${t.sampleRate / 1000} kHz, resampled to ${f.rate / 1000} kHz`
+      : t && engine.trackGain(t) !== 1 ? 'No: ReplayGain changes the level' : xs.active ? 'No: effects or volume are processing the samples (all flat + DAC volume = bit-perfect)' : '—';
+    const keep = new Set(['Source', 'ReplayGain', 'Equalizer', 'Tone', 'Stereo', 'Reverb', 'Limiter']);
+    rows.splice(0, rows.length, ...rows.filter(([k]) => keep.has(k)),
+      ['Decoder', 'ffmpeg → 32-bit integer PCM at the source rate'],
+      ['Resampler', resampled ? `${t.sampleRate / 1000} → ${f.rate / 1000} kHz (the device refused the source rate)` : 'None (native rate)'],
+      ['Processing', !xs ? '—' : xs.active ? `64-bit float, TPDF dither to ${f?.bits || 24}-bit` : 'None: every stage is flat, samples untouched'],
+      ['Volume', !xs ? '—' : xs.hw ? `DAC hardware volume ${db(xs.dacDb)}${xs.digitalDb ? ` · digital ${db(xs.digitalDb)} (headroom for +${(+xs.boostDb).toFixed(1)} dB of boost)` : ''}` : `64-bit digital ${db(xs.digitalDb)} (this DAC has no hardware volume)`],
+      ['Output', f ? `WASAPI exclusive · ${f.rate / 1000} kHz · ${f.bits}-bit in ${f.container}-bit · ${set.device ? 'selected device' : 'system default device'}` : 'WASAPI exclusive · not open yet'],
+      ['Bit-perfect', why],
+      ['Not in exclusive mode', 'Tempo / pitch, crossfade, visualizers']);
+  }
   dialog('Audio info', h('table', {}, ...rows.map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v)))), [{ label: 'Close', primary: true, id: 1 }], true);
 }
 
