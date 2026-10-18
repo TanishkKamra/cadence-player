@@ -7,7 +7,12 @@ import { motionOff } from '../motion.js';
 
 const W_MIN = 500, W_MAX = 860;
 // widths come from the real DOM at the heaviest weight (a canvas guess mis-sizes fallback-script glyphs): one forced layout for the whole page of lyrics
+// deferred to idle: a view/track transition never waits on this forced layout (one read pass, then one write pass)
 export function fit(scroll) {
+  const run = () => { if (scroll.isConnected) measure(scroll); };
+  if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1200 }); else setTimeout(run, 400);
+}
+function measure(scroll) {
   const ws = [...scroll.querySelectorAll('.ly-line.kin .w')];
   if (!ws.length) return;
   scroll.classList.add('measuring');
@@ -53,16 +58,21 @@ export function ensureMark(scroll) {
   return mark;
 }
 
+// WAAPI (compositor) instead of gsap tweens: gsap writes inline styles on the main thread every frame (style recalc + paint per glyph)
+const EXPO = 'cubic-bezier(.16,1,.3,1)';
 export function enter(el, index, total, scroll) {
   const m = ensureMark(scroll);
   m.textContent = String(index + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0');
-  const y = el.offsetTop + 6;
-  if (motionOff() || !window.gsap) { m.style.transform = `translateY(${y}px)`; return; }
-  gsap.to(m, { y, duration: 1.05, ease: 'expo.out', overwrite: true });
+  const y = el.offsetTop + 6, from = m._y ?? y; m._y = y;
+  m.style.transform = `translateY(${y}px)`;
+  if (motionOff()) return;
+  m._a?.cancel();
+  if (from !== y) m._a = m.animate([{ transform: `translateY(${from}px)` }, { transform: `translateY(${y}px)` }], { duration: 1050, easing: EXPO });
   if (!SPLIT() || el._ws == null) return;
   split?.revert();
   split = SplitText.create(el._ws, { type: 'chars', charsClass: 'ch' });
-  gsap.fromTo(split.chars, { yPercent: 38, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.7, ease: 'expo.out', stagger: { each: 0.011, from: 'start' }, overwrite: true, clearProps: 'transform,opacity' });
+  const n = split.chars.length;
+  split.chars.forEach((c, k) => c.animate([{ transform: 'translateY(38%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 700, delay: k * 11, easing: EXPO, fill: 'backwards' }));
 }
 export function leave(el) {
   split?.revert(); split = null;
@@ -75,8 +85,9 @@ export function frame(el, pos) {
   el._ws.forEach((w, k) => {
     const [a, b] = el._tm[k];
     const raw = Math.max(0, Math.min(1, (pos - a) / Math.max(0.08, b - a)));
-    const p = off ? (raw > 0 ? 1 : 0) : raw * raw * (3 - 2 * raw);
-    if (Math.abs(p - (w._p ?? -1)) > 0.012 || (p === 1) !== (w._p === 1)) { w._p = p; w.style.setProperty('--p', p.toFixed(3)); }
+    // 16 steps: each step re-shapes one fixed-width word (font-weight is not compositable), so cost scales with steps, not frames
+    const p = off ? (raw > 0 ? 1 : 0) : Math.round(raw * raw * (3 - 2 * raw) * 16) / 16;
+    if (p !== w._p) { w._p = p; w.style.setProperty('--p', p.toFixed(3)); }
     const cur = raw > 0 && raw < 1, sung = raw >= 1;
     if (w._cur !== cur) { w._cur = cur; w.classList.toggle('cur', cur); }
     if (w._sung !== sung) { w._sung = sung; w.classList.toggle('sung', sung); }

@@ -188,14 +188,14 @@ body.press .npv:has(> .ly-sparse) .npv-left { flex: 1; width: 100%; }
 body.press .npv .lyrics-view { flex: 1; min-width: 0; margin: 8px 8px 8px 0; background: var(--plate); box-shadow: inset 0 0 0 1px var(--edge); border-radius: var(--w-r4); overflow: hidden; position: relative; padding: 0; }
 body.press .npv .lyrics-view.ly-sparse { background: transparent; box-shadow: none; }
 body.press .npv .ly-scroll { padding: 34vh 22px 44vh 56px; text-align: left; -webkit-mask-image: linear-gradient(transparent 0, #000 14%, #000 78%, transparent 100%); mask-image: linear-gradient(transparent 0, #000 14%, #000 78%, transparent 100%); }
-body.press .ly-line { --sz: calc(var(--ly-size, 34px) * 1.12); font-size: var(--sz); line-height: 1; letter-spacing: -.04em; font-weight: 500; text-align: left; margin: 0 0 .34em; color: var(--text); opacity: .24; filter: none; text-shadow: none; transform: translateX(0); transform-origin: left center; transition: opacity .8s var(--ease-out), transform 1s var(--ease-out); cursor: pointer; text-wrap: pretty; }
+body.press .ly-line { --sz: calc(var(--ly-size, 34px) * 1.12); font-size: var(--sz); line-height: 1; letter-spacing: -.04em; font-weight: 500; text-align: left; margin: 0 0 .34em; color: var(--text); opacity: .24; filter: none; text-shadow: none; transform: translateX(0); transform-origin: left center; transition: opacity .3s linear, transform .3s var(--ease-out); cursor: pointer; text-wrap: pretty; }
 body.press .ly-line.d3 { opacity: .28; } body.press .ly-line.d2 { opacity: .36; } body.press .ly-line.d1 { opacity: .56; }
 body.press .ly-line.pa { opacity: .16; } body.press .ly-line.pa.d1 { opacity: .3; } body.press .ly-line.pa.d2 { opacity: .22; }
 body.press .ly-line:hover { opacity: .75; }
 body.press .ly-line.active { opacity: 1; transform: translateX(.16em); }
-body.press .ly-line .w { display: inline-block; vertical-align: top; font-weight: calc(500 + 340 * var(--p)); transform: translateY(calc(var(--p) * -.04em)); color: inherit; background: none; transition: font-weight .9s var(--ease-out), transform .9s var(--ease-out), color .5s; margin: 0 .26em 0 0; white-space: nowrap; contain: layout style; }
+body.press .ly-line .w { display: inline-block; vertical-align: top; font-weight: 600; -webkit-text-stroke: calc(var(--p) * .04em) currentColor; transform: translateY(calc(var(--p) * -.04em)); color: inherit; background: none; transition: none; margin: 0 .26em 0 0; white-space: nowrap; contain: layout style; }
 body.press .ly-line .w:last-child { margin-right: 0; }
-body.press .ly-line.active .w { transition: color .4s; }
+
 body.press .ly-line.active .w:not(.sung):not(.cur) { opacity: .5; }
 body.press .ly-line .w.cur { color: var(--acc-t); -webkit-text-fill-color: currentColor; }
 body.press .ly-line .w .ch { display: inline-block; }
@@ -203,7 +203,7 @@ body.press .ly-line.gap { opacity: .2; font-size: calc(var(--sz) * .7); letter-s
 body.press .ly-line.plain { opacity: .88; font-weight: 600; cursor: default; font-size: calc(var(--ly-size, 34px) * .86); transform: none; line-height: 1.12; }
 body.press .ly-line.plain .w { font-weight: 600; transform: none; width: auto !important; margin-right: .26em; white-space: normal; }
 body.press .ly-line.nl { line-height: 1.22; }
-body.press .ly-scroll.measuring .w { font-weight: 840 !important; transition: none !important; width: auto !important; }
+body.press .ly-scroll.measuring .w { font-weight: 600 !important; -webkit-text-stroke: .04em currentColor !important; transition: none !important; width: auto !important; }
 body.press .ly-mark { position: absolute; left: 0; top: 0; width: 52px; font: 700 10.5px/1 var(--mono); letter-spacing: .08em; color: var(--acc-t); will-change: transform; white-space: nowrap; }
 body.press .ly-mark::after { content: ""; display: block; width: 24px; height: 2px; border-radius: 1px; background: rgb(var(--accent)); margin-top: 8px; }
 body.press .ly-source { font: 500 10.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--text-3); padding-top: 18px; }
@@ -312,3 +312,4 @@ body.press #player .np-art .ov { bottom: 12px; }
 body.press #player .np-art .ov.r { top: 12px; bottom: auto; }
 body.press[data-theme="light"] #player .np-art::after { display: none; }
 body.press #player .np-art, body.press[data-theme] #player .np-art { -webkit-mask-image: none !important; mask-image: none !important; }
+body.press :is(.npv-title,.chip.title,.view-title h1) .sw { display: inline-block; white-space: nowrap; }

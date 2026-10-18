@@ -347,10 +347,12 @@ body.mt .m-bezel { inset: 0; background: var(--chrome); box-shadow: 0 30px 40px 
 body.mt .m-dial { inset: 3.4%; background: repeating-conic-gradient(from 0deg, rgb(255 255 255 / .05) 0 .5deg, transparent .5deg 1.1deg), conic-gradient(from calc(var(--la) + 20deg), #12151a 0, #5a6674 7%, #1a1e23 19%, #07080a 31%, #4c5663 46%, #07080a 58%, #66727f 71%, #1a1e23 85%, #12151a 100%); box-shadow: inset 0 0 0 1px #000, inset 0 6px 18px rgb(0 0 0 / .8); }
 body.mt .m-idx { inset: 0; }
 body.mt .m-idx i { position: absolute; inset: 0; border-radius: 0; transform: rotate(var(--a)); }
-body.mt .m-idx i::before { content: ""; position: absolute; left: 50%; top: 8.2%; width: 4px; height: 4.4%; margin-left: -2px; border-radius: 1px; background: linear-gradient(90deg, #1f1607, #7d6733 45%, #66532a 55%, #1f1607); box-shadow: 0 0 0 1px rgb(0 0 0 / .8); transition: background .25s, box-shadow .25s; }
+body.mt .m-idx i::before { content: ""; position: absolute; left: 50%; top: 8.2%; width: 4px; height: 4.4%; margin-left: -2px; border-radius: 1px; background: linear-gradient(90deg, #1f1607, #7d6733 45%, #66532a 55%, #1f1607); box-shadow: 0 0 0 1px rgb(0 0 0 / .8);  }
 body.mt .m-idx i.q::before { width: 7px; margin-left: -3.5px; height: 6.4%; }
-body.mt .m-idx i.lit::before { background: linear-gradient(90deg, color-mix(in srgb, var(--led) 70%, #000), #fff 46%, var(--led) 58%, color-mix(in srgb, var(--led) 70%, #000)); box-shadow: 0 0 0 1px rgb(0 0 0 / .65), 0 0 5px #fff, 0 0 12px var(--led), 0 0 22px color-mix(in srgb, var(--led) 60%, transparent); }
-body.mt .m-meter .needle { stroke: #fff; stroke-width: 1.6; transform-box: view-box; transform-origin: 100px 124px; transform: rotate(var(--n, -48deg)); transition: none; filter: drop-shadow(0 1px 1px #000); }
+body.mt .m-idx i::after { content: ""; position: absolute; left: 50%; top: 8.2%; width: 4px; height: 4.4%; margin-left: -2px; border-radius: 1px; opacity: 0; transition: opacity .25s; transition-delay: inherit;  background: linear-gradient(90deg, color-mix(in srgb, var(--led) 70%, #000), #fff 46%, var(--led) 58%, color-mix(in srgb, var(--led) 70%, #000)); box-shadow: 0 0 0 1px rgb(0 0 0 / .65), 0 0 4px #fff, 0 0 12px var(--led); }
+body.mt .m-idx i.q::after { width: 7px; margin-left: -3.5px; height: 6.4%; }
+body.mt .m-idx i.lit::after { opacity: 1; }
+body.mt .m-meter .needle { stroke: #fff; stroke-width: 1.6; transform-box: view-box; transform-origin: 100px 124px; transform: rotate(-48deg); transition: none; }
 body.mt .m-rim { inset: 17%; background: var(--chrome); box-shadow: 0 8px 14px -4px rgb(0 0 0 / .9), 0 0 0 1px #000; }
 body.mt .m-cover { inset: 19.2%; overflow: hidden; background: #000 center / cover no-repeat; box-shadow: inset 0 0 0 1px #000, 0 0 0 2px #000; }
 body.mt .m-cover::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(120% 90% at 30% 10%, rgb(255 255 255 / .22), transparent 42%), linear-gradient(112deg, rgb(255 255 255 / .1) 0 30%, transparent 30.4%); mix-blend-mode: screen; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .6), inset 0 8px 16px rgb(0 0 0 / .45); }
@@ -361,7 +363,7 @@ body.mt .m-readout { position: relative; display: grid; grid-template-columns: m
 body.mt .m-snail { position: relative; width: 112px; height: 112px; border-radius: 50%; border: 4px solid transparent; background: repeating-radial-gradient(circle at 50% 50%, rgb(255 255 255 / .05) 0 .8px, transparent .8px 2.4px), conic-gradient(from calc(var(--la) + 40deg), #12151a, #38404a 12%, #14171b 28%, #0a0c0f 40%, #323a44 58%, #0a0c0f 72%, #3a424d 88%, #12151a) padding-box, var(--chrome) border-box; background-origin: border-box; box-shadow: 0 10px 14px -6px rgb(0 0 0 / .95), 0 0 0 1px #000, inset 0 0 0 1px #000; display: grid; place-items: center; }
 body.mt .m-snail .t { font-family: var(--mono); font-size: 19px; letter-spacing: .02em; color: var(--ink-led); text-shadow: 0 0 10px color-mix(in srgb, var(--led) 60%, transparent); font-variant-numeric: tabular-nums; font-weight: 500; }
 body.mt .m-snail .cap { position: absolute; bottom: 20px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .24em; color: rgb(var(--hl) / .7); }
-body.mt .m-snail .hand { position: absolute; inset: 4px; border-radius: 50%; transform: rotate(var(--sec, 0deg)); transition: transform .5s linear; }
+body.mt .m-snail .hand { position: absolute; inset: 4px; border-radius: 50%; transform: rotate(var(--sec, 0deg)); }
 body.mt .m-snail .hand::after { content: ""; position: absolute; left: 50%; top: 0; width: 2px; height: 22px; margin-left: -1px; background: linear-gradient(180deg, var(--brass-hi), var(--brass)); box-shadow: 0 0 0 .5px #000; }
 body.mt .m-meter { position: relative; height: 112px; border-radius: 12px; background: radial-gradient(120% 120% at 50% 110%, #2c2410 0, #12100a 52%, #060605 100%); box-shadow: inset 0 3px 10px rgb(0 0 0 / .95), inset 0 0 0 1px #000, 0 1px 0 rgb(var(--hl) / .22), 0 0 0 5px #0a0c0f, 0 0 0 6px rgb(var(--hl) / .22); overflow: hidden; }
 body.mt .m-meter::before { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 90% at 50% 100%, color-mix(in srgb, var(--led) 24%, transparent), transparent 70%); }
@@ -510,3 +512,8 @@ body.mt[data-theme="light"] #titlebar :is(button, .tb-ic, .ic) { color: #14171c;
 body.mt .eq-curve { box-shadow: inset 0 1px 0 rgb(var(--hl) / .3), inset 0 -2px 0 rgb(0 0 0 / .5), 0 0 70px -26px rgb(var(--accent) / .5), 0 20px 36px -22px #000; }
 body.mt .eq-tabs { background-image: var(--glass), repeating-linear-gradient(90deg, rgb(201 164 92 / .55) 0 1px, transparent 1px 8px); background-size: auto, 100% 4px; background-position: 0 0, 0 100%; background-repeat: no-repeat; }
 body.mt[data-theme="light"] .m-snail .t { color: var(--led); text-shadow: 0 0 10px color-mix(in srgb, var(--led) 70%, transparent); }
+
+/* perf: stage is its own paint island, ticks/needle never dirty siblings */
+body.mt .m-stage { contain: layout paint style; }
+body.mt .m-idx i { will-change: auto; }
+body.mt .m-idx.chg i::after { will-change: opacity; } /* tiny layers, only while the power-on sweep runs */

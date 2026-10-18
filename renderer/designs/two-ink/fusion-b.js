@@ -88,7 +88,7 @@ function palette(hues) {
   for (let n = 0; n < 20 && contrast(rest, sheet) < 3.2; n++) rest = mix(rest, t2, .15);
   return { stock, sheet, hi, i1, i2, i3, t1, t2, inkRgb, rest };
 }
-const css = c => `rgb(${c.join(' ')})`;
+const css = c => `rgb(${c.join(" ")})`;
 function setInks(p) {
   const s = root.style;
   s.setProperty('--i1', trip(p.i1)); s.setProperty('--i2', trip(p.i2)); s.setProperty('--i3', trip(p.i3));
@@ -96,7 +96,7 @@ function setInks(p) {
   s.setProperty('--accent', trip(p.t1)); // legacy consumers (switches, EQ fills) read the text-safe ink
   s.setProperty('--seek-played', trip(p.t1)); s.setProperty('--seek-rest', trip(p.rest));
   s.setProperty('--ink-rgb', trip(p.inkRgb));
-  document.querySelectorAll('.fb-swatch i').forEach((el, k) => { const c = [p.i1, p.i2, p.i3, p.stock][k]; el.style.background = css(c); el.dataset.hex = hex(c); el.dataset.nm = ['Ink A', 'Ink B', 'Ink C', 'Stock'][k]; });
+  document.querySelectorAll('.fb-swatch i').forEach((el, k) => { const c = [p.i1, p.i2, p.i3, p.stock][k]; if (!c) return; el.style.background = css(c); el.dataset.hex = hex(c); el.dataset.nm = ['Ink A', 'Ink B', 'Ink C', 'Stock'][k]; });
 }
 function setStock(p, instant) {
   const s = root.style;
@@ -123,6 +123,7 @@ function halftone(px, W, ang, cell, cover, rgb) {
   g.fill();
   return c.convertToBlob({ type: 'image/png' }).then(b => URL.createObjectURL(b));
 }
+const idle = () => new Promise(r => requestIdleCallback(r, { timeout: 400 }));
 async function plates(img, p, hues) {
   const W = 120, c = document.createElement('canvas');
   c.width = c.height = W;
@@ -133,7 +134,9 @@ async function plates(img, p, hues) {
   const hd = (h, t) => Math.abs(((h - t + 540) % 360) - 180);
   const sim = (r, gg, b, t) => { const [h, s] = toHsl([r, gg, b]); return s < .12 ? .5 : Math.max(0, 1 - hd(h, t) / 110); };
   const dark = (r, g2, b) => 1 - (.2126 * r + .7152 * g2 + .0722 * b) / 255;
+  await idle();
   const A = await halftone(px, W, .26, 9, (r, g2, b) => Math.pow(dark(r, g2, b), .8) * (.62 + .5 * sim(r, g2, b, h1)) * 1.15, p.i1);
+  await idle();
   const B = await halftone(px, W, 1.31, 9, (r, g2, b) => Math.pow(dark(r, g2, b) * 1.05, 1.15) * (.55 + .6 * sim(r, g2, b, h2)) * 1.2 + .06, p.i2);
   return [A, B];
 }
@@ -182,6 +185,12 @@ export function print(force) {
   print.tm = setTimeout(() => { if (!window.fb?.freeze) root.classList.remove('printing'); }, 1500);
 }
 
+// plates live in a style rule, not an inherited custom property (a root write would re-substitute the blob URL on every element)
+let htEl = null;
+function htStyle(u) {
+  htEl ||= document.head.appendChild(document.createElement('style'));
+  htEl.textContent = u ? `body.fb.has-ht :is(.np-art,.fb-art)::before{background-image:url("${u[0]}")}body.fb.has-ht :is(.np-art,.fb-art)::after{background-image:url("${u[1]}")}` : '';
+}
 async function onArt(img, force) {
   const my = ++token;
   let hues = null, key = null;
@@ -197,11 +206,11 @@ async function onArt(img, force) {
   if (same) return;
   if (first || motionOff()) { endPour(null); pendingStock = null; setStock(p, true); }
   else { pour(p); print(); }
-  if (!img) { root.style.setProperty('--ht-a', 'none'); root.style.setProperty('--ht-b', 'none'); return; }
+  if (!img) { htStyle(); return; }
   const e = cache.get(key);
-  if (!e.urls || e.th !== theme()) { try { e.urls = await plates(img, p, hues); e.th = theme(); } catch { return; } }
+  if (!e.urls || e.th !== theme()) { await new Promise(r => setTimeout(() => requestIdleCallback(r, { timeout: 600 }), first || motionOff() ? 0 : 1000)); if (my !== token) return; try { e.urls = await plates(img, p, hues); e.th = theme(); } catch { return; } }
   if (my !== token) return;
-  root.style.setProperty('--ht-a', `url("${e.urls[0]}")`); root.style.setProperty('--ht-b', `url("${e.urls[1]}")`);
+  htStyle(e.urls);
 }
 window.addEventListener('cadence:art', e => onArt(e.detail.img));
 new MutationObserver(() => { if (cur) onArt(cur.img, true); }).observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });

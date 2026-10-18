@@ -17,7 +17,11 @@ document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style=
 // knurling as an anti-aliased SVG (repeating-conic-gradient moires at this size)
 { const N = 36, pts = []; for (let i = 0; i < N; i++) { const a0 = i * 2 * Math.PI / N, a1 = a0 + Math.PI / N, f = a => `${(50 + 50 * Math.sin(a)).toFixed(2)},${(50 - 50 * Math.cos(a)).toFixed(2)}`; pts.push(`<path d="M50 50L${f(a0)}L${f(a1)}Z"/>`); }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><circle cx="50" cy="50" r="50" fill="#161a1f"/><g fill="#3a424b">${pts.join('')}</g><circle cx="50" cy="50" r="50" fill="none" stroke="#000" stroke-opacity=".5" stroke-width="3"/></svg>`;
-  body.style.setProperty('--knurl', `url("data:image/svg+xml,${encodeURIComponent(svg)}")`); }
+  const blobVar = (n, s) => body.style.setProperty(n, `url(${URL.createObjectURL(new Blob([s], { type: 'image/svg+xml' }))})`);
+  blobVar('--knurl', svg);
+  // long data: URLs in inherited custom properties are re-substituted on every element per write; blob: URLs are short
+  const cs = getComputedStyle(body);
+  for (const n of ['--grain', '--brush']) { const m = /^\s*url\("?data:image\/svg\+xml,(.*?)"?\)\s*$/s.exec(cs.getPropertyValue(n)); if (m) { try { blobVar(n, decodeURIComponent(m[1])); } catch {} } } }
 
 /* ---------- 1. the key light: one point light = the pointer. Each live part derives its own angle to it. ---------- */
 const LIVE = '#sidebar, #player, .t-btn, .m-knob, .m-stage, .m-snail, .view-head .cat, .np-art, .brand-mark, .tb-btn.primary';
@@ -45,10 +49,13 @@ const rescan = () => { clearTimeout(scanT); scanT = setTimeout(scan, 160); };
 addEventListener('resize', rescan);
 
 /* ---------- 2. cover -> matcap (once per track) -> --env, dip-crossfaded ---------- */
-let envKey = '', envUrl = '';
+let envKey = '', envUrl = '', envVal = '';
+// --env is set only on the parts that paint it (player bar + stage), never on body: a body write restyles the whole tree
+const applyEnv = () => document.querySelectorAll('#player, .m-stage').forEach(e => e.style.setProperty('--env', envVal));
+const predecode = a => { if (a) { const i = new Image(); i.src = artUrl(a, true); i.decode().catch(() => {}); } }; // big cover decoded off-thread before the stage paints it
 async function buildEnv(art) {
   if (!art || art === envKey) return;
-  envKey = art;
+  envKey = art; await new Promise(r => setTimeout(r, 450)); // off the transition frames
   try {
     const img = new Image(); img.crossOrigin = 'anonymous'; img.src = artUrl(art); await img.decode();
     const S = 16, c = new OffscreenCanvas(S, S), g = c.getContext('2d', { willReadFrequently: true });
@@ -75,7 +82,7 @@ async function buildEnv(art) {
     const next = URL.createObjectURL(blob);
     body.classList.add('env-dip');
     setTimeout(() => {
-      body.style.setProperty('--env', `url(${next})`);
+      envVal = `url(${next})`; applyEnv();
       if (envUrl) URL.revokeObjectURL(envUrl);
       envUrl = next; body.classList.remove('env-dip');
     }, motionOk() ? 230 : 0);
@@ -131,7 +138,7 @@ function buildVolume() {
 
 /* ---------- 4. Now Playing instrument: sunburst dial, applied indices, circular cover, snail sub-dial, needle meter ---------- */
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-let eng = null, an = null, buf = null, tickT = 0, needleRaf = 0, nAng = -50, np = null;
+let eng = null, an = null, buf = null, tickT = 0, needleRaf = 0, needleT = 0, nAng = -50, np = null;
 const ndl = (db) => Math.max(-50, Math.min(50, -50 + (db + 40) / 43 * 100));
 function meterSVG() {
   const s = document.createElementNS(SVGNS, 'svg'); s.setAttribute('viewBox', '0 0 200 112'); s.setAttribute('aria-hidden', 'true');
@@ -154,7 +161,7 @@ function enhanceNP() {
   for (let i = 0; i < 60; i++) { const q = h('i', { class: i % 5 === 0 ? 'q' : '' }); q.style.setProperty('--a', i * 6 + 'deg'); idx.append(q); }
   const cover = h('div', { class: 'm-cover' }); if (art) cover.style.backgroundImage = `url(${art})`;
   stage.append(h('i', { class: 'm-bezel' }), h('i', { class: 'm-dial' }), idx, h('i', { class: 'm-rim' }), cover, h('i', { class: 'm-env' }));
-  left.insertBefore(stage, left.firstChild);
+  left.insertBefore(stage, left.firstChild); if (envVal) stage.style.setProperty('--env', envVal);
   const snailT = h('span', { class: 't' }, '0:00'), hand = h('i', { class: 'hand' });
   const snail = h('div', { class: 'm-snail', 'aria-label': 'Elapsed time' }, hand, snailT, h('span', { class: 'cap' }, 'ELAPSED'));
   const meter = h('div', { class: 'm-meter', 'aria-hidden': 'true' }, meterSVG());
@@ -164,25 +171,35 @@ function enhanceNP() {
   charge(true); startTick();
   rescan();
 }
+// one-off GPU shader warm-up: draw a tiny faint copy of the instrument at idle so the first Now Playing visit pays no compile/raster stall
+let warmed = false;
+function warm() {
+  if (warmed || !motionOk()) return; warmed = true;
+  const w = h('div', { 'aria-hidden': 'true', style: 'position:fixed;right:0;bottom:0;width:520px;height:700px;overflow:hidden;opacity:.02;pointer-events:none;z-index:-1' });
+  const st = h('div', { class: 'm-stage', style: 'width:520px;min-width:0;margin:0' }, h('i', { class: 'm-bezel' }), h('i', { class: 'm-dial' }), h('i', { class: 'm-idx' }, h('i', { class: 'lit' })), h('i', { class: 'm-rim' }), h('div', { class: 'm-cover' }), h('i', { class: 'm-env' }));
+  w.append(st, h('div', { class: 'm-snail', style: '' }), h('div', { class: 'm-meter', style: '' }, meterSVG()));
+  const a = window.cadence?.engine?.track?.art; if (a) st.querySelector('.m-cover').style.backgroundImage = `url(${artUrl(a, true)})`;
+  document.body.append(w); setTimeout(() => w.remove(), 1500);
+}
 function litCount() { const e = window.cadence?.engine, d = e?.track?.duration; return d ? Math.round(Math.min(1, e.position / d) * 60) : 0; }
-let chargeT = 0;
+let chargeT = 0, enhT = 0;
 function charge(sweep) { // signature moment: the 60 indices power on clockwise in song colour, then retreat to the elapsed position
   if (!np) return;
   clearTimeout(chargeT);
   const n = litCount(), go = motionOk() && sweep, T = np.ticks;
   if (!go) { T.forEach((el, i) => { el.style.transitionDelay = '0ms'; el.classList.toggle('lit', i < n); }); np.lit = n; np.busy = false; return; }
-  np.busy = true;
-  T.forEach((el, i) => { el.style.transitionDelay = i * 13 + 'ms'; el.classList.add('lit'); });
+  np.busy = true; np.idx.classList.add('chg');
+  T.forEach((el, i) => { el.style.transitionDelay = i * 6 + 'ms'; el.classList.add('lit'); });
   chargeT = setTimeout(() => {
     if (!np) return;
     const m = litCount();
-    T.forEach((el, i) => { el.style.transitionDelay = (59 - i) * 11 + 'ms'; el.classList.toggle('lit', i < m); });
+    T.forEach((el, i) => { el.style.transitionDelay = (59 - i) * 5 + 'ms'; el.classList.toggle('lit', i < m); });
     np.lit = m;
-    chargeT = setTimeout(() => { if (np) { T.forEach(el => el.style.transitionDelay = '0ms'); np.busy = false; } }, 60 * 11 + 400);
-  }, 60 * 13 + 320);
+    chargeT = setTimeout(() => { if (np) { T.forEach(el => el.style.transitionDelay = '0ms'); np.busy = false; np.idx.classList.remove('chg'); } }, 60 * 5 + 300);
+  }, 60 * 6 + 200);
 }
 function tick() {
-  if (!np || !np.idx.isConnected) { np = null; clearInterval(tickT); tickT = 0; cancelAnimationFrame(needleRaf); return; }
+  if (!np || !np.idx.isConnected) { np = null; clearInterval(tickT); tickT = 0; cancelAnimationFrame(needleRaf); clearTimeout(needleT); return; }
   const e = window.cadence?.engine; if (!e) return;
   const pos = e.position || 0, n = litCount();
   np.snailT.textContent = fmt(pos); np.hand.style.setProperty('--sec', (pos % 60) * 6 + 'deg');
@@ -195,21 +212,19 @@ function syncTick() { // the 2 Hz clock exists only while a track plays
   else if (!play && tickT) { clearInterval(tickT); tickT = 0; }
 }
 function runNeedle() {
-  cancelAnimationFrame(needleRaf);
+  cancelAnimationFrame(needleRaf); clearTimeout(needleT);
   const e = window.cadence?.engine;
-  if (!np || !e || body.classList.contains('paused') || !motionOk()) { if (np) np.meter.style.setProperty('--n', '-48deg'); return; }
+  if (!np || !e || body.classList.contains('paused') || !motionOk()) { if (np) np.needle.style.transform = 'rotate(-48deg)'; return; }
   try {
     if (!an && e.ctx && e.tap) { an = e.ctx.createAnalyser(); an.fftSize = 1024; e.tap.connect(an); buf = new Float32Array(an.fftSize); }
   } catch { an = null; }
-  let tgt = -48;
-  let lastT = 0;
+  let tgt = -48, shown = 99;
   const step = t => {
-    if (t - lastT < 15) { needleRaf = requestAnimationFrame(step); return; } lastT = t; // ~60 fps ceiling
-    if (!np || !np.meter.isConnected || body.classList.contains('paused')) { if (np) np.meter.style.setProperty('--n', '-48deg'); return; }
+        if (!np || !np.meter.isConnected || body.classList.contains('paused')) { if (np) np.needle.style.transform = 'rotate(-48deg)'; return; }
     if (an) { an.getFloatTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; const db = 20 * Math.log10(Math.sqrt(s / buf.length) + 1e-6); tgt = ndl(db); }
     nAng += (tgt - nAng) * (tgt > nAng ? .35 : .06); // fast attack, slow release
-    np.meter.style.setProperty('--n', nAng.toFixed(2) + 'deg');
-    needleRaf = requestAnimationFrame(step);
+    if (Math.abs(nAng - shown) > .05) { shown = nAng; np.needle.style.transform = `rotate(${nAng.toFixed(2)}deg)`; }
+    needleT = setTimeout(() => { needleRaf = requestAnimationFrame(step); }, 33); // ~30 Hz via timer: no rAF spinning between needle frames
   };
   needleRaf = requestAnimationFrame(step);
 }
@@ -225,12 +240,12 @@ function init() {
   if (!c || !c.engine) return setTimeout(init, 150);
   eng = c.engine; c.metal = { charge, sweep, frame(n) { clearTimeout(chargeT); clearInterval(tickT); tickT = 0; if (np) { np.frozen = true; np.busy = true; np.ticks.forEach((el, i) => { el.style.transitionDelay = "0ms"; el.classList.toggle("lit", i < n); }); } } }; // debug handle for the screenshot harness
   buildVolume();
-  const onTrack = () => { const t = eng.track; if (t?.art) buildEnv(t.art); setTimeout(() => { enhanceNP(); charge(true); }, 60); };
+  const onTrack = () => { const t = eng.track; predecode(t?.art); if (t?.art) { buildEnv(t.art); setTimeout(warm, 500); } setTimeout(() => { enhanceNP(); charge(true); }, 380); };
   eng.addEventListener('track', onTrack);
   let was = eng.playing;
   eng.addEventListener('state', () => { if (eng.playing !== was) { was = eng.playing; sweep(); setTimeout(() => { syncTick(); runNeedle(); tick(); }, 30); } });
-  if (eng.track?.art) buildEnv(eng.track.art);
-  new MutationObserver(() => { enhanceNP(); rescan(); }).observe($('#main'), { childList: true });
+  predecode(eng.track?.art); if (eng.track?.art) { buildEnv(eng.track.art); setTimeout(warm, 1500); }
+  new MutationObserver(() => { clearTimeout(enhT); enhT = setTimeout(() => { enhanceNP(); rescan(); }, 260); }).observe($('#main'), { childList: true }); // after the view's own transition
   new MutationObserver(() => rescan()).observe($('#player'), { childList: true });
   enhanceNP(); scan();
 }

@@ -7,9 +7,8 @@
 @property --dye-hi { syntax: '<color>'; inherits: true; initial-value: #9fb0cc; }
 @property --dye-lo { syntax: '<color>'; inherits: true; initial-value: #2c3a52; }
 @property --led    { syntax: '<color>'; inherits: true; initial-value: #cfe0ff; }
-:root { --lx: 0; --ly: 0; --la: -34; --dye-rgb: 111 127 154; --led-rgb: 207 224 255; --on-dye: #0c0e11;
-  transition: --dye .7s var(--ease-out), --dye-hi .7s var(--ease-out), --dye-lo .7s var(--ease-out), --led .7s var(--ease-out); }
-html:has(body.anim-off) { transition: none; }
+:root { --lx: 0; --ly: 0; --la: -34; --dye-rgb: 111 127 154; --led-rgb: 207 224 255; --on-dye: #0c0e11; }
+/* --dye/--led used to glide on :root; an inherited registered prop transitioning there restyles the whole tree every frame for 0.7 s, so the dye now steps (the light sweep carries the change) */
 
 /* ---------- tokens: space-black anodised (dark) ---------- */
 body.mt {
@@ -66,7 +65,7 @@ body.mt::after { display: none; }
 body.mt #bg { display: none; }
 body.mt .lg-defs { display: none; }
 body.mt { font-family: var(--font); letter-spacing: -.005em; }
-body.mt .ic { filter: drop-shadow(0 1px 0 var(--ic-hi, rgb(255 255 255 / .14))) drop-shadow(0 -1px 0 var(--ic-lo, rgb(0 0 0 / .45))); }
+body.mt :is(#player, #sidebar, .topbar, .view-head) .ic { filter: drop-shadow(0 1px 0 var(--ic-hi, rgb(255 255 255 / .14))) drop-shadow(0 -1px 0 var(--ic-lo, rgb(0 0 0 / .45))); }
 body.mt[data-theme="light"] { --ic-hi: rgb(255 255 255 / .9); --ic-lo: rgb(0 0 0 / 0); }
 
 /* ---------- shared material helpers ---------- */
@@ -109,7 +108,7 @@ body.mt #sidebar::before {
 body.mt[data-theme="light"] #sidebar::before { background: linear-gradient(calc(var(--la) * -1deg + 90deg), #fff, rgb(255 255 255 / .85) 16%, rgb(255 255 255 / .35) 36%, rgb(60 74 94 / .45) 54%, rgb(255 255 255 / .45) 72%, rgb(255 255 255 / .9) 90%, #fff); }
 body.mt #player { margin: 2px 12px 14px 0; padding: 14px 16px 16px; gap: 14px; position: relative; }
 /* travelling key-light sheen (compositor transform only) */
-body.mt #player::after { content: ""; position: absolute; inset: -20%; z-index: 0; pointer-events: none; will-change: transform;
+body.mt #player::after { content: ""; position: absolute; inset: -20%; z-index: 0; pointer-events: none;
   background: radial-gradient(42% 26% at 30% 16%, rgb(255 255 255 / .12), transparent 70%), linear-gradient(112deg, transparent 34%, rgb(255 255 255 / .05) 44%, rgb(255 255 255 / .085) 49%, rgb(255 255 255 / .03) 56%, transparent 64%);
   transform: translate(calc(var(--lx) * 6%), calc(var(--ly) * 4%)); }
 body.mt[data-theme="light"] #player::after { background: radial-gradient(40% 28% at 30% 14%, rgb(255 255 255 / .55), transparent 70%), linear-gradient(112deg, transparent 40%, rgb(255 255 255 / .3) 49%, transparent 58%); }

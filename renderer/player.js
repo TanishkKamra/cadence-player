@@ -195,7 +195,7 @@ export function paintBackdrop(t = engine?.track) {
     if (engine.track && engine.track !== t) return;
     const c = document.createElement('canvas'), N = 256;
     c.width = c.height = N;
-    const g = c.getContext('2d');
+    const g = c.getContext('2d', { willReadFrequently: true }); // CPU canvas: reading a GPU canvas back stalls the track change on the GPU
     g.filter = filter;
     g.drawImage(img, -N * 0.15, -N * 0.15, N * 1.3, N * 1.3);
     const url = c.toDataURL('image/jpeg', 0.92);

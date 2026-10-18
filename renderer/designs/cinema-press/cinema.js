@@ -50,18 +50,19 @@ const fieldCss = p => `radial-gradient(48% 62% at 90% 24%, rgb(${p.a} / .55), tr
 
 let seq = 0, url = null, lastImg = null;
 new MutationObserver(() => lastImg && window.dispatchEvent(new CustomEvent('cadence:art', { detail: { img: lastImg, noPour: true } }))).observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-function soft(img) { // one-shot blurred cover bitmap: the texture the ink carries
+function soft(img) { // one-shot blurred cover bitmap (async blob: no sync toDataURL / giant data: string on the painting element)
   const c = document.createElement('canvas'); c.width = c.height = 96; const g = c.getContext('2d');
   g.filter = 'blur(7px) saturate(1.5)'; g.drawImage(img, -14, -14, 124, 124);
-  return c.toDataURL('image/jpeg', .85);
+  return new Promise(r => c.toBlob(b => r(URL.createObjectURL(b)), 'image/jpeg', .85));
 }
 
 window.addEventListener('cadence:art', async e => {
   const { img } = e.detail; if (img) lastImg = img; const my = ++seq, light = document.body.dataset.theme === 'light';
   let pal; if (!img) { return; }
-  try { pal = palette(img); } catch (x) { console.error("wi palette", x.message); return; }
-  let p, bmp; try { p = apply(pal, light); bmp = soft(img); } catch (x) { console.error('wi apply', x.message); return; }
-  if (my !== seq) return;
+  // palette + root vars in the SAME task as player.js's accent write (one tree restyle, the cover is already decoded); only the bitmap encode is async
+  let p; try { pal = palette(img); p = apply(pal, light); } catch (x) { console.error('wi apply', x.message); return; }
+  let bmp; try { bmp = await soft(img); } catch (x) { console.error('wi soft', x.message); return; }
+  if (my !== seq) { URL.revokeObjectURL(bmp); return; }
   const layer = document.createElement('div'); layer.className = 'ink-l';
   const sh = light ? .5 : document.body.dataset.theme === 'black' ? .86 : .42;
   layer.style.backgroundImage = `linear-gradient(rgb(${p.deep} / ${sh}), rgb(${p.deep} / ${sh})), ${fieldCss(p)}, url('${bmp}')`;
@@ -71,14 +72,15 @@ window.addEventListener('cadence:art', async e => {
   const ox = r.left + r.width / 2, oy = r.top + r.height / 2;
   layer.style.setProperty('--ox', ox + 'px'); layer.style.setProperty('--oy', oy + 'px');
   ink.append(layer);
-  const done = () => { old.forEach(o => o.remove());  };
-  if (first || e.detail.noPour || motionOff()) { layer.style.setProperty('--r', '300vmax'); return done(); }
+  const done = () => { old.forEach(o => { URL.revokeObjectURL(o._u); o.remove(); }); };
+  layer._u = bmp;
+  if (first || e.detail.noPour || motionOff()) return done();
   // pour: three drops (offset centres, staggered) bloom with a soft ink edge; spring from Motion-baked physics
-  layer.classList.add('pouring');
-  const reach = Math.hypot(Math.max(ox, innerWidth - ox), Math.max(oy, innerHeight - oy)) + 220;
+  const reach = Math.hypot(Math.max(ox, innerWidth - ox), Math.max(oy, innerHeight - oy)) + 40;
   const s = SPRING.smooth, dur = Math.round(s.duration * 3.3 * (document.body.classList.contains('anim-fast') ? .6 : 1));
-  const a = layer.animate([{ '--r': '0px' }, { '--r': reach + 'px' }], { duration: dur, easing: s.easing, fill: 'forwards' });
-  a.finished.then(() => { layer.classList.remove('pouring'); layer.style.setProperty('--r', '300vmax'); a.cancel(); done(); }, () => {});
+  // clip-path circle on a static texture layer: composited, no per-frame repaint (replaces the animated full-window mask-image)
+  const a = layer.animate([{ clipPath: `circle(0px at ${ox}px ${oy}px)` }, { clipPath: `circle(${reach}px at ${ox}px ${oy}px)` }], { duration: dur, easing: s.easing, fill: 'backwards' });
+  a.finished.then(done, done);
 });
 
 // Eyebrow for headers that have none: the sidebar section the page belongs to (Library / Smart lists / ...)

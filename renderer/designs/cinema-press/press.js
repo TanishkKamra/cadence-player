@@ -8,11 +8,15 @@ const G = () => window.gsap && window.SplitText;
 if (G()) gsap.registerPlugin(SplitText);
 
 // ---- fit the Now Playing title ----
+let lastW = 0;
 function fitTitle(t) {
-  let s = Math.min(112, Math.max(56, t.parentElement.clientWidth * .26));
+  const w = t.parentElement.clientWidth;
+  if (Math.abs(w - lastW) < 3 && t.style.getPropertyValue('--tsz')) return; // resize ticks with no real width change cost a full text layout each
+  lastW = w;
+  let s = Math.min(112, Math.max(56, w * .26));
   const ok = () => t.scrollWidth <= t.clientWidth + 1 && t.getBoundingClientRect().height <= s * .88 * 3.3;
   t.style.setProperty('--tsz', s + 'px');
-  for (let n = 0; n < 40 && !ok() && s > 30; n++) { s -= 4; t.style.setProperty('--tsz', s + 'px'); }
+  for (let n = 0; n < 8 && !ok() && s > 30; n++) { s = Math.max(30, s * Math.min(.92, t.clientWidth / Math.max(1, t.scrollWidth))); t.style.setProperty('--tsz', s + 'px'); }
 }
 
 // ---- letters rise ----
@@ -24,10 +28,12 @@ function rise(el, delay = 0) {
   if (!txt) return;
   last.set(el, txt);
   let sp;
-  try { sp = SplitText.create(el, { type: 'chars', charsClass: 'ch' }); } catch { return; }
+  try { sp = SplitText.create(el, { type: 'words,chars', charsClass: 'ch', wordsClass: 'sw' }); } catch { return; }
   const dur = document.body.classList.contains('anim-fast') ? .6 : 1;
-  gsap.fromTo(sp.chars, { yPercent: 55, opacity: 0 }, { yPercent: 0, opacity: 1, duration: .9 * dur, delay, ease: 'expo.out', stagger: { each: .022 * dur, from: 'start' }, clearProps: 'transform,opacity',
-    onComplete: () => { if (sp.chars[0]?.isConnected) sp.revert(); } });
+  // WAAPI (compositor) instead of gsap: gsap rewrote inline styles on every glyph every frame (style recalc + text relayout)
+  const ease = 'cubic-bezier(.16,1,.3,1)';
+  const an = sp.chars.map((c, k) => c.animate([{ transform: 'translateY(55%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900 * dur, delay: delay * 1000 + k * 22 * dur, easing: ease, fill: 'backwards' }));
+  Promise.all(an.map(a => a.finished)).then(() => { if (sp.chars[0]?.isConnected) sp.revert(); }, () => {});
 }
 
 window.addEventListener('press:title', e => rise(e.detail.el, .1));

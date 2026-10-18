@@ -25,7 +25,7 @@ function palette(img, fallback) {
   const inks = [];
   let shadow = [20, 20, 24];
   if (img) {
-    const N = 48, c = document.createElement('canvas'); c.width = c.height = N;
+    const N = 32, c = document.createElement('canvas'); c.width = c.height = N;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, N, N);
     const d = g.getImageData(0, 0, N, N).data, B = new Map(); let dr = 0, dg = 0, db = 0, dn = 0;
     for (let i = 0; i < d.length; i += 4) {
@@ -77,27 +77,34 @@ window.addEventListener('cadence:art', e => {
   const { img, rgb: base } = e.detail, my = ++seq, theme = body.dataset.theme;
   let pal; try { pal = palette(img, base); } catch (x) { console.error('fc palette', x.message); return; }
   cur = pal;
-  const p = derive(pal, theme); apply(p);
-  const layer = document.createElement('div'); layer.className = 'ink-l';
-  layer.style.backgroundImage = fieldCss(p, theme === 'light');
-  const old = [...ink.children], first = !ink.dataset.has; ink.dataset.has = 1;
   const art = $('#player .np-art'), r = art ? art.getBoundingClientRect() : { left: innerWidth * .8, top: 300, width: 0, height: 0 };
   const ox = r.left + r.width / 2, oy = r.top + r.height / 2;
-  layer.style.setProperty('--ox', ox + 'px'); layer.style.setProperty('--oy', oy + 'px');
-  ink.append(layer);
+  const p = derive(pal, theme); apply(p); // rect read first: no forced style recalc inside this task
+  const layer = document.createElement('div'); layer.className = 'ink-l';
+  const fcss = fieldCss(p, theme === 'light');
+  const old = [...ink.children], first = !ink.dataset.has; ink.dataset.has = 1;
   const done = () => old.forEach(o => o.remove());
-  if (first || motionOff() || my !== seq) { layer.style.setProperty('--r', '300vmax'); return done(); }
-  layer.classList.add('pouring');
-  const reach = Math.hypot(Math.max(ox, innerWidth - ox), Math.max(oy, innerHeight - oy)) + 220;
-  const dur = Math.round(2000 * (body.classList.contains('anim-fast') ? .6 : 1)); // ink spreads on a long ease (a spring is front-loaded: the mask would be done in 600 ms)
-  const a = layer.animate([{ '--r': '0px' }, { '--r': reach + 'px' }], { duration: dur, easing: 'cubic-bezier(.42,0,.18,1)', fill: 'forwards' });
-  a.finished.then(() => { layer.classList.remove('pouring'); layer.style.setProperty('--r', '300vmax'); a.cancel(); done(); }, () => {});
+  if (first || motionOff() || my !== seq) { layer.style.backgroundImage = fcss; ink.append(layer); return done(); }
+  // The pour is two nested layers animated with transform only (compositor): a masked disc scales up from the cover, the field inside counter-scales so it never zooms.
+  // (the old animated mask-image / clip-path repainted the full window every frame)
+  const reach = Math.hypot(Math.max(ox, innerWidth - ox), Math.max(oy, innerHeight - oy)) + 40, R = reach / .72;
+  const disc = document.createElement('div'), field = document.createElement('div'); field.className = 'pf';
+  Object.assign(layer.style, { backgroundImage: 'none' }); layer.classList.add('pouring');
+  Object.assign(disc.style, { position: 'absolute', left: ox - R + 'px', top: oy - R + 'px', width: 2 * R + 'px', height: 2 * R + 'px', willChange: 'transform, opacity',
+    webkitMaskImage: 'radial-gradient(circle closest-side, #000 72%, transparent 100%)', maskImage: 'radial-gradient(circle closest-side, #000 72%, transparent 100%)' });
+  Object.assign(field.style, { position: 'absolute', left: R - ox + 'px', top: R - oy + 'px', width: innerWidth + 'px', height: innerHeight + 'px', transformOrigin: `${ox}px ${oy}px`, backgroundImage: fcss, backgroundSize: '100% 100%' });
+  disc.append(field); layer.append(disc); ink.append(layer);
+  const dur = Math.round(2000 * (body.classList.contains('anim-fast') ? .6 : 1)), N = 24, k0 = [], k1 = [], k2 = [];
+  for (let i = 0; i <= N; i++) { const t = i / N, e = t * t * (3 - 2 * t), sc = .12 + .88 * e; k0.push({ transform: `scale(${sc})`, opacity: Math.min(1, t * 6) }); k1.push({ transform: `scale(${1 / sc})` }); }
+  const opt = { duration: dur, easing: 'linear', fill: 'forwards' };
+  const a = disc.animate(k0, opt); field.animate(k1, opt);
+  a.finished.then(() => { layer.classList.remove('pouring'); layer.style.backgroundImage = fcss; layer.replaceChildren(); done(); }, () => {});
 });
 // a theme switch re-derives the chassis from the same palette (no pour)
 new MutationObserver(() => {
   if (!cur) return;
   const p = derive(cur, body.dataset.theme); apply(p);
-  const l = ink.lastElementChild; if (l) l.style.backgroundImage = fieldCss(p, body.dataset.theme === 'light');
+  const l = ink.lastElementChild?.querySelector('.pf') || ink.lastElementChild; if (l) l.style.backgroundImage = fieldCss(p, body.dataset.theme === 'light');
 }).observe(body, { attributes: true, attributeFilter: ['data-theme'] });
 
 // ---------- level knob (replaces the volume range): 41 ticks light to the level, detent every 5 ----------
@@ -192,11 +199,13 @@ function paintRings(stat) {
       i ? g.lineTo(px, py) : g.moveTo(px, py);
     }
     if (di >= 1) g.closePath();
-    g.strokeStyle = `rgba(${col.join(',')},${alpha * Math.min(1, di * 1.6)})`; g.lineWidth = lw * 1.25 * d; g.shadowColor = `rgba(${col.join(',')},1)`; g.shadowBlur = 12 * d; g.lineJoin = 'round'; g.stroke();
+    const al = alpha * Math.min(1, di * 1.6); g.lineJoin = 'round'; // glow = two wider translucent strokes (shadowBlur is a per-frame GPU blur)
+    g.strokeStyle = `rgba(${col.join(',')},${al * .12})`; g.lineWidth = lw * 8 * d; g.stroke(); g.strokeStyle = `rgba(${col.join(',')},${al * .25})`; g.lineWidth = lw * 3.6 * d; g.stroke();
+    g.strokeStyle = `rgba(${col.join(',')},${al})`; g.lineWidth = lw * 1.25 * d; g.stroke();
   };
   const r0 = R * 1.17 * fitK;
   ring(r0, k, cols[0], 1.8, 0, .95); ring(r0 + R * .15 * fitK, k * .8, cols[1], 1.3, Math.PI / M * 3, .7); ring(r0 + R * .3 * fitK, k * .6, cols[2], 1.1, Math.PI / M * 6, .55);
-  g.shadowBlur = 0; g.globalCompositeOperation = 'source-over';
+  g.globalCompositeOperation = 'source-over';
   paintScope(stat);
 }
 function paintScope(stat) {
@@ -205,10 +214,10 @@ function paintScope(stat) {
   const { w, h, d } = sz, g = c.getContext('2d'), col = (window.fcRings || [HOUSE])[0];
   g.clearRect(0, 0, w, h);
   g.strokeStyle = 'rgba(128,128,128,.28)'; g.lineWidth = d; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.moveTo(w / 2, 0); g.lineTo(w / 2, h); g.stroke();
-  g.beginPath(); g.strokeStyle = `rgba(${col.join(',')},.85)`; g.lineWidth = 1.2 * d; g.shadowColor = `rgba(${col.join(',')},1)`; g.shadowBlur = 7 * d;
+  g.beginPath(); g.strokeStyle = `rgba(${col.join(',')},.85)`; g.lineWidth = 1.2 * d;
   if (!stat && anL) { const sc = w * .3 / Math.max(.15, agc); for (let i = 0; i < 1024; i += 2) { const px = w / 2 + (bl[i] - br[i]) * sc * .7, py = h / 2 - (bl[i] + br[i]) * sc * .7; i ? g.lineTo(px, py) : g.moveTo(px, py); } }
   else for (let i = 0; i <= 90; i++) { const t = i / 90 * Math.PI * 2; g.lineTo(w / 2 + Math.sin(t * 2) * w * .17, h / 2 - Math.sin(t * 3 + .6) * h * .17); }
-  g.stroke(); g.shadowBlur = 0;
+  g.stroke(); g.strokeStyle = `rgba(${col.join(',')},.22)`; g.lineWidth = 4 * d; g.stroke();
 }
 function tick(t) {
   raf = 0;
@@ -290,20 +299,35 @@ mountMini();
 boot();
 
 // quantised dot-matrix seek strip (player.js calls P.seekPainter when a design sets it). Columns are 5px, peaks snap to whole dot rows, played dots are the lamp.
+let dc = null; // cached dot layers: A = unplayed look, B = played look (both with ghost dots); per frame = two drawImage + the playhead column
 function drawDots(g, W, H, dpr, peaks, x, k) {
-  const light = false, lamp = (getComputedStyle(document.documentElement).getPropertyValue('--lcd') || '255 160 60').trim().split(/\s+/).join(',');
+  const lamp = (root.style.getPropertyValue('--lcd') || '255 160 60').trim().split(/\s+/).join(','), key = `${W}|${H}|${lamp}|${peaks?.length}|${peaks?.[0]}|${k.toFixed(2)}`;
   const pitch = 5 * dpr, rows = Math.max(3, Math.floor(H / pitch) | 1), cols = Math.floor(W / pitch), r = 1.15 * dpr, mid = (rows - 1) / 2;
-  const ghost = light ? 'rgba(0,0,0,0.09)' : 'rgba(255,255,255,0.075)', off = light ? 'rgba(0,0,0,0.42)' : 'rgba(255,255,255,0.36)';
-  const pc = Math.floor(x / pitch);
-  for (let c = 0; c < cols; c++) {
-    const p = peaks?.length ? (peaks[Math.floor(c / cols * peaks.length)] || 0) * k : 0;
-    const lit = Math.max(1, Math.round(Math.pow(p, 1.7) * (mid + 1))); // dots lit above and below the centre line (power curve spreads loud masters)
-    const px = c * pitch + pitch / 2;
-    for (let j = 0; j < rows; j++) {
-      const on = Math.abs(j - mid) < lit && (peaks?.length || j === mid);
-      g.fillStyle = c === pc ? `rgba(${lamp},1)` : on ? (c < pc ? `rgba(${lamp},0.92)` : off) : ghost;
-      g.beginPath(); g.arc(px, H / 2 + (j - mid) * pitch, c === pc ? r * 1.25 : r, 0, 6.2832); g.fill();
+  const ghost = 'rgba(255,255,255,0.075)', off = 'rgba(255,255,255,0.36)', lit = [];
+  if (!dc || dc.key !== key) {
+    const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
+    dc = { key, A: mk(), B: mk() };
+    const a = dc.A.getContext('2d'), b = dc.B.getContext('2d');
+    for (let c = 0; c < cols; c++) {
+      const p = peaks?.length ? (peaks[Math.floor(c / cols * peaks.length)] || 0) * k : 0, n = Math.max(1, Math.round(Math.pow(p, 1.7) * (mid + 1)));
+      lit[c] = n;
+      for (const [q, on] of [[a, off], [b, `rgba(${lamp},0.92)`]]) {
+        q.fillStyle = ghost; q.beginPath();
+        for (let j = 0; j < rows; j++) if (!(Math.abs(j - mid) < n && (peaks?.length || j === mid))) { const px = c * pitch + pitch / 2, py = H / 2 + (j - mid) * pitch; q.moveTo(px + r, py); q.arc(px, py, r, 0, 6.2832); }
+        q.fill(); q.fillStyle = on; q.beginPath();
+        for (let j = 0; j < rows; j++) if (Math.abs(j - mid) < n && (peaks?.length || j === mid)) { const px = c * pitch + pitch / 2, py = H / 2 + (j - mid) * pitch; q.moveTo(px + r, py); q.arc(px, py, r, 0, 6.2832); }
+        q.fill();
+      }
     }
+    dc.lit = lit;
+  }
+  const pc = Math.floor(x / pitch), cut = Math.min(W, Math.max(0, pc * pitch)), cut2 = Math.min(W, (pc + 1) * pitch);
+  if (cut > 0) g.drawImage(dc.B, 0, 0, cut, H, 0, 0, cut, H);
+  if (cut2 < W) g.drawImage(dc.A, cut2, 0, W - cut2, H, cut2, 0, W - cut2, H);
+  if (pc >= 0 && pc < cols) { // playhead column, drawn bigger
+    const n = dc.lit[pc], px = pc * pitch + pitch / 2; g.fillStyle = `rgba(${lamp},1)`; g.beginPath();
+    for (let j = 0; j < rows; j++) { const py = H / 2 + (j - mid) * pitch; g.moveTo(px + r * 1.25, py); g.arc(px, py, r * 1.25, 0, 6.2832); }
+    g.fill();
   }
 }
 P.seekPainter = drawDots;

@@ -16,15 +16,19 @@ function noiseTile(w, h, sx, sy, alpha, seed) {
   const c = o.getContext('2d'); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(s, 0, 0, w, h);
   return o;
 }
+/* big data: URLs inside inherited custom props are re-substituted per element on every style recalc (~40 ms/root write); blob: URLs are short */
+const blobs = {};
+function blobVar(name, canvas, type, q) {
+  canvas.toBlob(b => { if (!b) return; const u = URL.createObjectURL(b); css(name, `url(${u})`); if (blobs[name]) setTimeout(() => URL.revokeObjectURL(blobs[name]), 2000); blobs[name] = u; }, type, q);
+}
 function bakeTextures() {
   const a = noiseTile(192, 192, 1, 1, 5, 7), b = noiseTile(192, 192, 2.4, 2.4, 6, 99);
   const g = document.createElement('canvas'); g.width = g.height = 192; const c = g.getContext('2d'); c.drawImage(a, 0, 0); c.drawImage(b, 0, 0);
   const br = noiseTile(256, 128, 60, 1, 34, 31); // long horizontal streaks
-  css('--grain', `url(${g.toDataURL('image/png')})`);
-  css('--brush', `url(${br.toDataURL('image/png')})`);
+  blobVar('--grain', g, 'image/png'); blobVar('--brush', br, 'image/png');
   const bs = document.createElement('canvas'); bs.width = 192; bs.height = 192; // brushed-plate tile: long streaks, very low alpha
   const bg = bs.getContext('2d'); bg.drawImage(noiseTile(192, 192, 140, 1, 12, 5), 0, 0);
-  css('--plate-brush', `url(${bs.toDataURL('image/png')})`);
+  blobVar('--plate-brush', bs, 'image/png');
 }
 
 /* ---------- one key light (pointer nudges it; rAF only until it settles) ---------- */
@@ -77,7 +81,7 @@ function dye() {
 /* ---------- env: the cover becomes a blurred studio reflection for every chrome part ---------- */
 function paintEnv(img) {
   const N = 160, c = document.createElement('canvas'); c.width = c.height = N;
-  const g = c.getContext('2d');
+  const g = c.getContext('2d', { willReadFrequently: true }); // CPU canvas: toBlob on a GPU canvas stalls the main thread on readback (30-60 ms)
   g.fillStyle = '#7d848e'; g.fillRect(0, 0, N, N);
   if (img) { g.filter = 'blur(9px) saturate(1.25)'; g.drawImage(img, -N * .2, -N * .2, N * 1.4, N * 1.4); g.filter = 'none'; }
   const v = (stops, w) => { const q = g.createLinearGradient(0, 0, 0, N); stops.forEach(([o, col]) => q.addColorStop(o, col)); g.fillStyle = q; g.fillRect(0, 0, N, N); };
@@ -88,22 +92,14 @@ function paintEnv(img) {
   g.fillStyle = s; g.fillRect(0, 0, N, N * .48);
   return c;
 }
-let envCur = null, envRaf = 0;
-/* cross-fade old -> new studio reflection over 650 ms (finite rAF, only on track change) */
+let envT = 0;
+/* one swap per track, deferred past the transition frames (no per-frame data-URL churn; --env is inherited, each write restyles the tree) */
 function envFrom(img) {
-  const next = paintEnv(img);
-  cancelAnimationFrame(envRaf);
-  const put = c => css('--env', `url(${c.toDataURL('image/jpeg', .88)})`);
-  if (!envCur || calm()) { envCur = next; put(next); return; }
-  const from = envCur, mix = document.createElement('canvas'); mix.width = mix.height = from.width; const g = mix.getContext('2d');
-  const k = document.body.classList.contains('anim-fast') ? 330 : 650, t0 = performance.now();
-  const step = now => {
-    const t = Math.min(1, (now - t0) / k), e = t * t * (3 - 2 * t);
-    g.globalAlpha = 1; g.drawImage(from, 0, 0); g.globalAlpha = e; g.drawImage(next, 0, 0);
-    put(mix);
-    if (t < 1) envRaf = requestAnimationFrame(step); else envCur = next;
-  };
-  envRaf = requestAnimationFrame(step);
+  clearTimeout(envT);
+  const put = () => blobVar('--env', next = paintEnv(img), 'image/jpeg', .88);
+  let next;
+  if (calm() || !blobs['--env']) return put();
+  envT = setTimeout(() => requestIdleCallback(put, { timeout: 600 }), 700);
 }
 function loadEnv(art) {
   if (!art) return envFrom(null);

@@ -90,7 +90,10 @@ export function lyricsView() {
     if (K && synced) { kin.fit(scroll); kin.ramp(lineEls, -1, -1); }
   }
   function tick() {
-    if (document.hidden || !engine.playing || !synced) tm = setTimeout(tick, 250); else raf = requestAnimationFrame(tick); // idle or nothing to sync: no per-frame loop
+    // per-frame only while a word-timed line fills; line-level lyrics need ~20 checks a second, kinetic steps (1/16) ~30
+    if (document.hidden || !engine.playing || !synced) tm = setTimeout(tick, 250);
+    else if (!K && lines[active]?.words) raf = requestAnimationFrame(tick);
+    else tm = setTimeout(tick, K ? 33 : 50);
     if (engine.track !== track) { load(); return; }
     if (!synced || !lines.length) return;
     const pos = engine.position - set.lyricsOffset;
