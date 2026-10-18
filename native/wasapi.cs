@@ -6,10 +6,14 @@
 //                         'P' / 'R'                        pause / resume (immediate)
 //                         'X' epoch:i32                    flush everything queued (immediate)
 //                         'K' tag:i32                      drop every queued item of track `tag` (marker and PCM)
-//                         'V' gain:f32                     software volume, 1 = untouched samples
+//                         'V' gain:f32                     volume (0..1, linear); the DAC's own volume carries it when it has one
+//                         'G' tag:i32 gain:f32             per-track gain (ReplayGain) for track `tag`
+//                         'S' len:i32 utf8                 DSP settings (see DspConfig.Parse in dsp.cs)
 // stdout lines:           pos <epoch> <frames>             real frames played since the last flush
 //                         open <tag> <rate> <validBits> <containerBits> <bufferFrames>
 //                         fail <tag> <message>        refuse <tag> <message> (this rate/bit depth only)
+//                         dsp <active 0|1> <digitalDb> <dacDb|-> <hwVolume 0|1> <boostDb>   whenever it changes
+//                         uvol <gain>                      the DAC volume was changed outside Cadence (keys, Windows)
 // argv[0]: endpoint friendly name ("" = default output).
 using System;
 using System.Collections.Generic;
@@ -32,17 +36,22 @@ static class Wasapi {
   static string deviceName;
   static StreamWriter stdout;
   static volatile bool failed;
+  static readonly Dictionary<int, double> tagGain = new Dictionary<int, double>(); // under L
+  static volatile DspConfig pendingCfg; static DspConfig cfg = new DspConfig();
+  static float appliedVol = -1f;
+  static Dsp dsp;
   static readonly Dictionary<int, int[]> pref = new Dictionary<int, int[]>(); // last working [container, valid] per source-depth class
 
   // device session
   static IAudioClient client; static IAudioRenderClient rc; static Fmt cur;
-  static int bufFrames, outBytes, bufMs; static bool started;
+  static int bufFrames, outBytes, valid, bufMs; static bool started;
   static long T, R, silDone, basePos, waitStart; // T = frames handed to the device, R = real (non-silence) frames
   static readonly List<long[]> sil = new List<long[]>(); // silence runs [startT, len] inserted on underrun
   static byte[] scratch = new byte[0];
 
   [MTAThread]
   static void Main(string[] args) {
+    if (args.Length > 0 && args[0] == "--selftest") { Environment.Exit(SelfTest()); }
     deviceName = args.Length > 0 ? args[0] : "";
     stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
     new Thread(Render) { IsBackground = true, Priority = ThreadPriority.Highest }.Start();
@@ -56,6 +65,11 @@ static class Wasapi {
         else if (op == 'P') paused = true;
         else if (op == 'R') paused = false;
         else if (op == 'V') { float v = br.ReadSingle(); gain = float.IsNaN(v) || float.IsInfinity(v) ? 0f : Math.Max(0f, Math.Min(1f, v)); }
+        else if (op == 'G') { int tag = br.ReadInt32(); float v = br.ReadSingle(); lock (L) tagGain[tag] = float.IsNaN(v) || float.IsInfinity(v) ? 1 : Math.Max(0, Math.Min(16, v)); }
+        else if (op == 'S') {
+          int len = br.ReadInt32(); if (len < 0 || len > (1 << 16)) { Console.Error.WriteLine("bad S length " + len); continue; }
+          pendingCfg = DspConfig.Parse(System.Text.Encoding.UTF8.GetString(br.ReadBytes(len)));
+        }
         else if (op == 'X') { int e = br.ReadInt32(); lock (L) { q.Clear(); queuedBytes = 0; flushReq = true; epoch = e; } }
         else if (op == 'K') {
           int tag = br.ReadInt32();
@@ -71,6 +85,7 @@ static class Wasapi {
         } catch (EndOfStreamException) { throw; } catch (Exception e) { Console.Error.WriteLine("bad command " + op + ": " + e.Message); }
       }
     } catch (EndOfStreamException) { } // parent went away
+    RestoreVolume();
   }
 
   static void Say(string s) { lock (stdout) stdout.WriteLine(s); }
@@ -86,6 +101,7 @@ static class Wasapi {
         lock (L) { flush = flushReq; flushReq = false; ep = epoch; if (q.Count > 0) head = q.First.Value; }
         if (flush) {
           if (client != null) { client.Stop(); client.Reset(); }
+          if (dsp != null) dsp.Reset();
           started = false; T = R = silDone = basePos = 0; sil.Clear(); waitStart = clock.ElapsedMilliseconds;
         }
         if (head != null && head.Fmt != null && !(client != null && Same(head.Fmt))) {
@@ -106,6 +122,7 @@ static class Wasapi {
           else Thread.Sleep(5);
           continue;
         }
+        Settings(clock);
         if (paused) { if (started) { client.Stop(); started = false; } }
         else Pump(clock);
         if (clock.ElapsedMilliseconds - lastReport >= 50) { lastReport = clock.ElapsedMilliseconds; Say("pos " + ep + " " + (basePos + Played())); }
@@ -125,17 +142,23 @@ static class Wasapi {
   // real frames the device has played this session (excludes silence inserted on underruns)
   static long Played() {
     uint pad; client.GetCurrentPadding(out pad);
-    long played = T - pad;
+    long played = T - pad - (dsp != null ? dsp.Latency : 0); // the DSP delays the output by its latency
+    if (played < 0) played = 0;
     while (sil.Count > 0 && sil[0][0] + sil[0][1] <= played) { silDone += sil[0][1]; sil.RemoveAt(0); }
     long part = sil.Count > 0 && sil[0][0] < played ? played - sil[0][0] : 0;
     return played - silDone - part;
   }
+
+  static double[] xbuf = new double[0], seg = new double[0];
+  static readonly List<double[]> chunks = new List<double[]>(); // [startFrame, frames, gain] of this pump's PCM
 
   static void Pump(Stopwatch clock) {
     uint pad; client.GetCurrentPadding(out pad);
     int avail = bufFrames - (int)pad, fb = 2 * outBytes, k = 0;
     if (avail <= 0) return;
     if (scratch.Length < avail * fb) scratch = new byte[avail * fb];
+    if (xbuf.Length < avail * 2) xbuf = new double[avail * 2];
+    chunks.Clear();
     lock (L) {
       if (flushReq) return;
       // don't start on a half-empty buffer (decoder still spinning up) unless it is taking long
@@ -144,13 +167,25 @@ static class Wasapi {
         Item it = q.First.Value;
         if (it.Fmt != null) { if (Same(it.Fmt)) { q.RemoveFirst(); continue; } break; } // gapless: same format just continues
         int n = Math.Min(avail - k, (it.Data.Length - it.Off) / 8);
-        Convert(it.Data, it.Off, scratch, k * fb, n * 2);
+        double tg; if (!tagGain.TryGetValue(it.Tag, out tg)) tg = 1;
+        chunks.Add(new double[] { k, n, tg });
+        for (int i = 0, o = it.Off, d = 2 * k; i < 2 * n; i++, o += 4, d++) xbuf[d] = BitConverter.ToInt32(it.Data, o) / 2147483648.0;
         k += n; it.Off += n * 8; queuedBytes -= n * 8;
         if (it.Off >= it.Data.Length) q.RemoveFirst();
       }
     }
     if (k == 0 && T == 0) return; // nothing to play yet
-    Array.Clear(scratch, k * fb, (avail - k) * fb);
+    Array.Clear(xbuf, 2 * k, 2 * (avail - k)); // underrun / tail: silence, run through the DSP so delays and reverb play out
+    if (k < avail) chunks.Add(new double[] { k, avail - k, -1 });
+    foreach (var c in chunks) {
+      int at = (int)c[0], n = (int)c[1];
+      if (c[2] >= 0) dsp.StreamGain = c[2];
+      if (seg.Length < 2 * n) seg = new double[2 * n];
+      Array.Copy(xbuf, 2 * at, seg, 0, 2 * n);
+      dsp.Process(seg, n);
+      Array.Copy(seg, 0, xbuf, 2 * at, 2 * n);
+    }
+    Quantize(xbuf, avail, scratch, !dsp.Neutral);
     IntPtr p;
     rc.GetBuffer((uint)avail, out p);
     Marshal.Copy(scratch, 0, p, avail * fb);
@@ -160,17 +195,19 @@ static class Wasapi {
     if (!started) { client.Start(); started = true; }
   }
 
-  // s32 samples -> device container (top bytes), optional gain
-  static void Convert(byte[] src, int so, byte[] dst, int d, int samples) {
-    float g = gain;
-    if (outBytes == 4 && g == 1f) { Buffer.BlockCopy(src, so, dst, d, samples * 4); return; }
-    int skip = 4 - outBytes;
-    for (int i = 0; i < samples; i++, so += 4) {
-      if (g != 1f) {
-        int s = BitConverter.ToInt32(src, so);
-        s = (int)Math.Max(int.MinValue, Math.Min(int.MaxValue, Math.Round(s * (double)g)));
-        for (int b = skip; b < 4; b++) dst[d++] = (byte)(s >> (8 * b));
-      } else for (int b = skip; b < 4; b++) dst[d++] = src[so + b];
+  // double -> device container at its valid bits. Neutral DSP: exact (the samples came from these bits). Otherwise TPDF dither.
+  static uint rng = 0x9E3779B9;
+  static double Rand() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng / 4294967296.0; }
+  static void Quantize(double[] x, int frames, byte[] dst, bool dither) {
+    int skip = 4 - outBytes, d = 0;
+    double scale = Math.Pow(2, valid - 1), hi = scale - 1;
+    for (int i = 0; i < 2 * frames; i++) {
+      double y = x[i] * scale;
+      if (dither && valid < 32) y += Rand() - Rand();
+      y = Math.Floor(y + 0.5);
+      if (y > hi) y = hi; else if (y < -scale) y = -scale;
+      int s32 = (int)((long)y << (32 - valid));
+      for (int b = skip; b < 4; b++) dst[d++] = (byte)(s32 >> (8 * b));
     }
   }
 
@@ -178,7 +215,7 @@ static class Wasapi {
     // [container, valid] candidates that carry the source bits untouched
     int[][] cands = f.Bits > 24 ? new[] { new[] { 32, 32 } }
       : f.Bits > 16 ? new[] { new[] { 32, 24 }, new[] { 24, 24 }, new[] { 32, 32 } }
-      : new[] { new[] { 16, 16 }, new[] { 24, 24 }, new[] { 32, 24 }, new[] { 32, 32 } };
+      : new[] { new[] { 32, 24 }, new[] { 24, 24 }, new[] { 32, 32 }, new[] { 16, 16 } }; // 16-bit sources ride in 24 bits: same samples, room for DSP
     failed = false;
     int pk = f.Bits > 24 ? 2 : f.Bits > 16 ? 1 : 0; int[] lead;
     if (pref.TryGetValue(pk, out lead)) cands = new[] { lead }.Concat(cands.Where(x => x[0] != lead[0] || x[1] != lead[1])).ToArray(); // reopen tries the layout that worked last time first
@@ -186,7 +223,8 @@ static class Wasapi {
     foreach (var c in cands) {
       try {
         if (Init(f.Rate, c[0], c[1])) {
-          cur = f; outBytes = c[0] / 8; pref[pk] = c;
+          cur = f; outBytes = c[0] / 8; valid = c[1]; pref[pk] = c;
+          dsp = new Dsp(f.Rate); dsp.Apply(cfg); appliedVol = -1f; // volume and headroom recomputed for this rate
           Say("open " + f.Tag + " " + f.Rate + " " + c[1] + " " + c[0] + " " + bufFrames);
           return;
         }
@@ -234,7 +272,88 @@ static class Wasapi {
     client = null; rc = null; cur = null; started = false; T = R = silDone = 0; sil.Clear();
   }
 
+  // ---------- settings: DSP config, and the volume carried by the DAC's own hardware volume ----------
+  // Like direct volume control: the samples stay at full resolution and the DAC sets the level. EQ boosts are made
+  // room for digitally (-boost dB) and the DAC is turned up by the same amount, so the level of everything else stays put.
+  static IAudioEndpointVolume ev; static bool hwVol, evTried; static float evMin, evMax, evInc, origDb = float.NaN, lastDac = float.NaN;
+  static double pendDb = double.NaN, digital = 1; static long pendAt, lastPoll; static string lastDsp = "";
+  static readonly object VL = new object(); static Guid evCtx = Guid.Empty;
+
+  static void Settings(Stopwatch clock) {
+    var c = pendingCfg;
+    bool changed = false;
+    if (c != null) { pendingCfg = null; cfg = c; if (dsp != null) dsp.Apply(c); changed = true; }
+    float g = gain;
+    if (changed || g != appliedVol) { appliedVol = g; Level(g, clock); }
+    long now = clock.ElapsedMilliseconds;
+    lock (VL) {
+      if (ev == null || !hwVol) return;
+      if (!double.IsNaN(pendDb)) {
+        if (now >= pendAt) { ev.SetMasterVolumeLevel((float)pendDb, ref evCtx); lastDac = (float)pendDb; pendDb = double.NaN; lastPoll = now; }
+        return;
+      }
+      if (now - lastPoll < 250) return;
+      lastPoll = now;
+      float lv; ev.GetMasterVolumeLevel(out lv);
+      if (Math.Abs(lv - lastDac) > Math.Max(0.6f, evInc)) { // changed with the volume keys or in Windows: the slider follows
+        double total = Math.Min(1, digital * Math.Pow(10, lv / 20.0));
+        lastDac = lv; gain = appliedVol = (float)total;
+        Say("uvol " + total.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture));
+        Level(total, clock); // same DAC step, refreshes the reported state
+      }
+    }
+  }
+
+  static void Level(double g, Stopwatch clock) {
+    if (dsp == null) return;
+    bool neutral = cfg.Neutral, off = g <= 1e-7;
+    double boost = neutral ? 0 : Math.Max(0, dsp.BoostDb()), dac = double.NaN;
+    EnsureVolume();
+    lock (VL) {
+      if (ev != null && hwVol) {
+        double want = off ? evMin : 20 * Math.Log10(g) + boost;
+        dac = Snap(Math.Max(evMin, Math.Min(Math.Min(evMax, 0), want)));
+        // neutral: the DAC alone sets the level, the samples stay untouched (bit-perfect); otherwise they carry the exact rest
+        digital = off ? 0 : neutral ? 1 : g / Math.Pow(10, dac / 20);
+        // the new digital gain reaches the DAC only after what is already buffered: change the DAC then
+        uint pad = 0; if (started) client.GetCurrentPadding(out pad);
+        pendDb = dac; pendAt = clock.ElapsedMilliseconds + (started ? (long)(1000.0 * (pad + dsp.Latency) / cur.Rate) : 0);
+      } else digital = g;
+    }
+    dsp.Volume = digital;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    string line = "dsp " + (neutral && digital == 1 ? 0 : 1) + " " + (digital > 0 ? (20 * Math.Log10(digital)).ToString("0.##", inv) : "-inf") + " "
+      + (double.IsNaN(dac) ? "-" : dac.ToString("0.##", inv)) + " " + (hwVol ? 1 : 0) + " " + boost.ToString("0.##", inv);
+    if (line != lastDsp) { lastDsp = line; Say(line); }
+  }
+  static double Snap(double db) { return evInc > 0 ? Math.Min(Math.Min(evMax, 0), evMin + Math.Round((db - evMin) / evInc) * evInc) : db; }
+
+  static void EnsureVolume() {
+    if (evTried) return;
+    evTried = true;
+    try {
+      object o; var iid = typeof(IAudioEndpointVolume).GUID;
+      Find().Activate(ref iid, 23, IntPtr.Zero, out o);
+      var e = (IAudioEndpointVolume)o;
+      uint hw; e.QueryHardwareSupport(out hw);
+      e.GetVolumeRange(out evMin, out evMax, out evInc);
+      e.GetMasterVolumeLevel(out origDb);
+      lock (VL) { ev = e; hwVol = (hw & 1) != 0; lastDac = origDb; }
+      Console.Error.WriteLine("device volume " + origDb + " dB, range " + evMin + ".." + evMax + " step " + evInc + ", hardware " + ((hw & 1) != 0));
+    } catch (Exception e) { Console.Error.WriteLine("no device volume: " + Describe(e)); }
+  }
+  // leave the DAC where the user had it before exclusive mode took it over
+  static void RestoreVolume() {
+    lock (VL) { try { if (ev != null && hwVol && !float.IsNaN(origDb)) ev.SetMasterVolumeLevel(origDb, ref evCtx); } catch { } ev = null; }
+  }
+
   static IAudioClient Activate() {
+    object o; var iid = typeof(IAudioClient).GUID;
+    Find().Activate(ref iid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out o);
+    return (IAudioClient)o;
+  }
+
+  static IMMDevice Find() {
     var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
     IMMDevice dev = null;
     if (deviceName != "") {
@@ -251,9 +370,7 @@ static class Wasapi {
       }
       if (dev == null) throw new InvalidOperationException("Output device not found: " + deviceName); // never fall back to another endpoint
     } else en.GetDefaultAudioEndpoint(0, 1 /* multimedia */, out dev);
-    object o; var iid = typeof(IAudioClient).GUID;
-    dev.Activate(ref iid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out o);
-    return (IAudioClient)o;
+    return dev;
   }
 
   // Chromium labels carry a " (vid:pid)" suffix and a "Default - " prefix the endpoint's friendly name lacks
@@ -276,6 +393,73 @@ static class Wasapi {
     if (e is COMException) return "WASAPI error 0x" + ((uint)e.HResult).ToString("X8");
     return System.Text.RegularExpressions.Regex.Replace(e.Message, @"\s+", " ").Trim();
   }
+
+  // ---------- --selftest: the DSP and output stage without a device (npm test) ----------
+  static int SelfTest() {
+    int fails = 0; const int fs = 96000;
+    Action<bool, string> ok = (c, what) => { Console.WriteLine((c ? "ok   " : "FAIL ") + what); if (!c) fails++; };
+    var rnd = new Random(7);
+    Func<Dsp, double[], double[]> run = (d, src) => { var buf = (double[])src.Clone(); for (int at = 0; at < buf.Length / 2; at += 1000) { int n = Math.Min(1000, buf.Length / 2 - at); var sg = new double[2 * n]; Array.Copy(buf, 2 * at, sg, 0, 2 * n); d.Process(sg, n); Array.Copy(sg, 0, buf, 2 * at, 2 * n); } return buf; };
+
+    // 1. neutral chain: 24-bit samples come out identical, only delayed by the limiter look-ahead; quantized bytes match
+    var dsp = new Dsp(fs); dsp.Apply(DspConfig.Parse("pre 0;band peaking 131 0 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;rev 0;lim 1"));
+    int F = 20000; var x = new double[2 * F];
+    for (int i = 0; i < x.Length; i++) x[i] = (rnd.Next(-8388608, 8388608) << 8) / 2147483648.0;
+    var y = run(dsp, x); int D = dsp.Latency; bool exact = dsp.Neutral;
+    for (int i = 2 * D; i < y.Length; i++) if (y[i] != x[i - 2 * D]) { exact = false; break; }
+    ok(exact, "neutral chain is bit-exact (latency " + D + " frames)");
+    outBytes = 3; valid = 24; var bytes = new byte[6 * F]; Quantize(x, F, bytes, false); bool same = true;
+    for (int i = 0; i < 2 * F && same; i++) { int s32 = (int)Math.Round(x[i] * 2147483648.0); for (int b = 1; b < 4; b++) if (bytes[3 * i + b - 1] != (byte)(s32 >> (8 * b))) same = false; }
+    ok(same, "24-bit quantize without dither returns the source bytes");
+
+    // 2. a +6 dB peak at 1 kHz lifts a 1 kHz tone by 6 dB, leaves 100 Hz alone
+    Func<double, string, double> gainAt = (f, cfgText) => {
+      var d = new Dsp(fs); d.Apply(DspConfig.Parse(cfgText)); var t = new double[2 * fs];
+      for (int i = 0; i < fs; i++) t[2 * i] = t[2 * i + 1] = 0.1 * Math.Sin(2 * Math.PI * f * i / fs);
+      var o = run(d, t); double pk = 0; for (int i = fs; i < 2 * fs; i++) pk = Math.Max(pk, Math.Abs(o[i])); return 20 * Math.Log10(pk / 0.1);
+    };
+    double g1k = gainAt(1000, "band peaking 1000 6 1;lim 1"), g100 = gainAt(100, "band peaking 1000 6 1;lim 1");
+    ok(Math.Abs(g1k - 6) < 0.05, "peak +6 dB at 1 kHz: " + g1k.ToString("0.000") + " dB");
+    ok(Math.Abs(g100) < 0.1, "100 Hz untouched by the 1 kHz band: " + g100.ToString("0.000") + " dB");
+    ok(Math.Abs(gainAt(1000, "pre -3;lim 1") + 3) < 0.01, "preamp -3 dB");
+
+    // 3. limiter: +12 dB bass boost on a full-scale 60 Hz tone never passes -0.3 dBFS
+    var dl = new Dsp(fs); dl.Apply(DspConfig.Parse("bass 12 120;lim 1")); var b2 = new double[4 * fs];
+    for (int i = 0; i < 2 * fs; i++) b2[2 * i] = b2[2 * i + 1] = 0.99 * Math.Sin(2 * Math.PI * 60 * i / fs);
+    var lo = run(dl, b2); double peak = 0; foreach (var v in lo) peak = Math.Max(peak, Math.Abs(v));
+    ok(peak <= Math.Pow(10, -0.3 / 20) + 1e-9, "limiter ceiling holds: peak " + (20 * Math.Log10(peak)).ToString("0.00") + " dBFS");
+
+    // 4. reverb: left-only impulse rings on the left, the right stays silent (stereo IR, no cross-talk); finite output
+    var dr = new Dsp(fs); dr.Apply(DspConfig.Parse("rev 1 0.3 0.5 1 0.5 0 0 1;lim 0"));
+    for (int w = 0; w < 400 && dr.Latency == dr.Latency && !RevReady(dr); w++) { dr.Process(new double[2000], 1000); Thread.Sleep(10); }
+    var imp = new double[2 * 4 * fs]; imp[0] = 1; var ro = run(dr, imp); double el = 0, er = 0; bool finite = true;
+    for (int i = 0; i < ro.Length; i += 2) { el += ro[i] * ro[i]; er += ro[i + 1] * ro[i + 1]; if (double.IsNaN(ro[i]) || double.IsInfinity(ro[i])) finite = false; }
+    ok(RevReady(dr) && el > 1e-6 && er < el * 1e-20 && finite, "reverb rings on L only (L " + el.ToString("0.###e0") + ", R " + er.ToString("0.###e0") + ")");
+
+    // 5. dithered output stays within 1 LSB of the exact value
+    var z = new double[2000]; for (int i = 0; i < z.Length; i++) z[i] = rnd.NextDouble() * 1.6 - 0.8;
+    var q1 = new byte[3 * 2000]; Quantize(z, 1000, q1, true); bool lsb = true;
+    for (int i = 0; i < 2000; i++) { int v = (q1[3 * i] << 8 | q1[3 * i + 1] << 16 | q1[3 * i + 2] << 24) >> 8; if (Math.Abs(v - z[i] * 8388608) > 1.5) lsb = false; }
+    ok(lsb, "TPDF dither within 1 LSB");
+
+    // 6. headroom: +5.2 dB soft bass (Q 0.97 overshoots a little) with +5.1 preamp needs a bit over 10.3 dB
+    var dh = new Dsp(fs); dh.Apply(DspConfig.Parse("pre 5.1;band lowshelf 131 5.2 0.97"));
+    double hb = dh.BoostDb(); ok(hb > 10.3 && hb < 11, "boost estimate " + hb.ToString("0.00") + " dB");
+    // 7. speed: 192 kHz, 10 bands + tone + limiter + the largest reverb must run well faster than real time
+    {
+      const int hr = 192000; var db = new Dsp(hr);
+      var sb = new System.Text.StringBuilder("pre 2;bass 4 90;treble 3 9000;lim 1;rev 1 1 0.5 0.8 1 0.3 0.4 0.5");
+      for (int k = 0; k < 10; k++) sb.Append(";band peaking " + (31 << k) + " 3 1.41");
+      db.Apply(DspConfig.Parse(sb.ToString()));
+      for (int w = 0; w < 2000 && db.Latency <= (int)Math.Round(hr * 0.005); w++) { db.Process(new double[2000], 1000); Thread.Sleep(5); }
+      var blk = new double[2 * 4800]; var sw = Stopwatch.StartNew(); int secs = 5;
+      for (int i = 0; i < secs * hr / 4800; i++) { for (int j = 0; j < blk.Length; j++) blk[j] = rnd.NextDouble() * 0.2 - 0.1; db.Process(blk, 4800); }
+      double rt = secs / sw.Elapsed.TotalSeconds;
+      ok(rt > 3 && db.Latency > (int)Math.Round(hr * 0.005), "worst case 192 kHz chain runs " + rt.ToString("0.0") + "x real time");
+    }
+    return fails;
+  }
+  static bool RevReady(Dsp d) { return d.Latency > (int)Math.Round(96000 * 0.005); }
 
   // ---------- COM interop ----------
   [DllImport("avrt.dll", CharSet = CharSet.Unicode)] static extern IntPtr AvSetMmThreadCharacteristicsW(string task, ref int index);
@@ -321,4 +505,16 @@ static class Wasapi {
   }
   [ComImport, Guid("F294ACFC-3146-4483-A7BF-ADDCA7C260E2"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
   interface IAudioRenderClient { void GetBuffer(uint frames, out IntPtr data); void ReleaseBuffer(uint frames, int flags); }
+  [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IAudioEndpointVolume {
+    void RegisterControlChangeNotify(IntPtr notify); void UnregisterControlChangeNotify(IntPtr notify);
+    void GetChannelCount(out uint n);
+    void SetMasterVolumeLevel(float db, ref Guid ctx); void SetMasterVolumeLevelScalar(float v, ref Guid ctx);
+    void GetMasterVolumeLevel(out float db); void GetMasterVolumeLevelScalar(out float v);
+    void SetChannelVolumeLevel(uint ch, float db, ref Guid ctx); void SetChannelVolumeLevelScalar(uint ch, float v, ref Guid ctx);
+    void GetChannelVolumeLevel(uint ch, out float db); void GetChannelVolumeLevelScalar(uint ch, out float v);
+    void SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid ctx); void GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+    void GetVolumeStepInfo(out uint step, out uint count); void VolumeStepUp(ref Guid ctx); void VolumeStepDown(ref Guid ctx);
+    void QueryHardwareSupport(out uint mask); void GetVolumeRange(out float min, out float max, out float inc);
+  }
 }

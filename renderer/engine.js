@@ -207,6 +207,7 @@ export class Engine extends EventTarget {
     this.preamp.gain.setTargetAtTime(on ? dbToGain(preamp) : 1, t, 0.02);
     this.regain();
     this.limiterBoost();
+    this.xoDsp();
   }
   setTone(on, bass, treble, bassFreq = this.o.bassFreq || 90, trebleFreq = this.o.trebleFreq || 9000) {
     Object.assign(this.o, { toneOn: on, bass, treble, bassFreq, trebleFreq });
@@ -214,9 +215,10 @@ export class Engine extends EventTarget {
     this.treble.set({ type: 'highshelf', freq: trebleFreq, q: 0.7 }, on ? treble : 0);
     this.regain();
     this.limiterBoost();
+    this.xoDsp();
   }
-  setBalance(v) { this.o.balance = v; this.balance.pan.setTargetAtTime(v, this.ctx.currentTime, 0.02); }
-  setWidth(v) { this.o.width = v; if (!this.o.exclusive) this.port.postMessage({ type: 'width', value: v }); }
+  setBalance(v) { this.o.balance = v; this.balance.pan.setTargetAtTime(v, this.ctx.currentTime, 0.02); this.xoDsp(); }
+  setWidth(v) { this.o.width = v; if (!this.o.exclusive) this.port.postMessage({ type: 'width', value: v }); this.xoDsp(); }
   // r: { on, size, damp, filter, fade, preDelay, preDelayMix, mix }
   setReverb(r) {
     this.o.reverb = r = { ...r };
@@ -232,6 +234,7 @@ export class Engine extends EventTarget {
     const m = r.on ? r.mix : 0;
     this.wet.gain.setTargetAtTime(m, t, 0.03);
     this.dry.gain.setTargetAtTime(1 - m * 0.45, t, 0.03);
+    this.xoDsp();
   }
   makeIR({ size, damp, fade }) {
     const rate = this.ctx.sampleRate, len = Math.floor(rate * (0.25 + size * 5.5));
@@ -254,6 +257,7 @@ export class Engine extends EventTarget {
     this.o.limiter = on;
     this.volume.disconnect(); this.limiter.disconnect();
     if (on) this.volume.connect(this.limiter).connect(this.ctx.destination); else this.volume.connect(this.ctx.destination);
+    this.xoDsp();
   }
   setVolume(v) {
     v = clamp(v, 0, 1, 0);
@@ -302,13 +306,14 @@ export class Engine extends EventTarget {
     if (resume) this.load(resume.entry, resume);
   }
 
-  // exclusive mode skips Web Audio entirely: EQ, tone, reverb, limiter, tempo, ReplayGain, crossfade and visualizers are bypassed
+  // exclusive mode skips Web Audio: the WASAPI helper runs the same EQ, tone, balance, width, reverb, limiter and ReplayGain
+  // in 64-bit (native/dsp.cs) at the file's own rate. Tempo/pitch, crossfade and the visualizers are not available there.
   async setExclusive(on) {
     const resume = this.cur && { entry: this.cur.entry, start: this.position, play: this.playing, quiet: true };
     this.stop();
     this.o.exclusive = on;
     this.port = on ? this.xoPort : this.node.port;
-    this.outFormat = null;
+    this.outFormat = null; this.xoState = null;
     this.xoRefused = new Set();
     if (on) { await this.xoConfig(); this.ctx.suspend(); }
     this.applyAll();
@@ -317,9 +322,30 @@ export class Engine extends EventTarget {
   async xoConfig() {
     this.port.postMessage({ type: 'config', device: await this.deviceLabel() }); // the helper matches the endpoint by name
   }
+  // the DSP settings as the helper reads them (DspConfig.Parse in native/dsp.cs); coalesced to one message per task
+  xoDsp() {
+    if (!this.o.exclusive || this.xoDspQueued) return;
+    this.xoDspQueued = true;
+    queueMicrotask(() => { this.xoDspQueued = false; if (this.o.exclusive) this.port.postMessage({ type: 'dsp', text: this.dspText() }); });
+  }
+  dspText() {
+    const o = this.o, r = o.reverb || {}, n = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
+    return [
+      `pre ${o.eqOn ? n(o.preamp) : 0}`,
+      ...(o.eqOn ? o.eqBands || [] : []).map(b => `band ${b.type} ${n(b.freq, 1000)} ${n(b.gain)} ${n(b.q, 0.71)}`),
+      `bass ${o.toneOn ? n(o.bass) : 0} ${n(o.bassFreq, 90)}`, `treble ${o.toneOn ? n(o.treble) : 0} ${n(o.trebleFreq, 9000)}`,
+      `bal ${n(o.balance)}`, `width ${n(o.width, 1)}`, `mono ${o.mono ? 1 : 0}`, `lim ${o.limiter ? 1 : 0}`,
+      `rev ${r.on ? 1 : 0} ${['size', 'damp', 'filter', 'fade', 'preDelay', 'preDelayMix', 'mix'].map(k => n(r[k])).join(' ')}`,
+    ].join(';');
+  }
   onXo(m) {
     if (!this.o.exclusive) return;
     if (m.type === 'format') { this.outFormat = m; this.emit('format', m); }
+    else if (m.type === 'dsp') { this.xoState = m; this.emit('format', this.outFormat); }
+    else if (m.type === 'uvol') { // the DAC volume was changed with the keys or in Windows: the slider follows
+      const v = Math.sqrt(clamp(m.value, 0, 1, 0));
+      if (Math.abs(v - this.o.volume) > 0.004) { this.o.volume = v; this.emit('volume', v); }
+    }
     else if (m.type === 'fail') this.emit('xofail', m);
     else if (m.type === 'refused') {
       // the device refused one rate: resample to another it may take, give up once every rate was refused
@@ -352,7 +378,7 @@ export class Engine extends EventTarget {
 
   trackGain(t) {
     const o = this.o, rg = t.rg;
-    if (o.rgMode === 'off' || o.exclusive) return 1;
+    if (o.rgMode === 'off') return 1;
     const useAlbum = o.rgMode === 'album' && rg?.ag != null;
     const db = rg ? (useAlbum ? rg.ag : rg.tg) : null;
     if (db == null) return dbToGain(clamp(o.noRgPreamp, -24, 24, 0));
@@ -590,7 +616,7 @@ export class Engine extends EventTarget {
     this.xfading = false;
     this.setPlaying(false);
   }
-  setMono(on) { this.o.mono = on; if (!this.o.exclusive) this.port.postMessage({ type: 'mono', value: on }); }
+  setMono(on) { this.o.mono = on; if (!this.o.exclusive) this.port.postMessage({ type: 'mono', value: on }); this.xoDsp(); }
   setGap(sec) { this.o.gap = sec; this.port.postMessage({ type: 'gap', frames: Math.round(sec * this.ctx.sampleRate) }); }
 
   get position() {
@@ -602,7 +628,11 @@ export class Engine extends EventTarget {
     const live = this.playing && s.at != null ? Math.min(this.now() - s.at, 0.25) : 0;
     return Math.max(s.start, s.start + (s.frames / s.rate + live - (this.playing ? latency : 0)) * s.tempo);
   }
-  get bitPerfect() { const f = this.outFormat; return !!f && this.o.volume >= 1 && f.rate === (this.track?.sampleRate || f.rate); }
+  // untouched samples: native rate, every DSP stage neutral, ReplayGain off, and volume carried by the DAC (or at 100%)
+  get bitPerfect() {
+    const f = this.outFormat, t = this.track;
+    return !!f && !!this.xoState && !this.xoState.active && f.rate === (t?.sampleRate || f.rate) && (!t || this.trackGain(t) === 1);
+  }
   get track() { return this.cur?.track || null; }
   get entry() { return this.cur?.entry || null; }
 

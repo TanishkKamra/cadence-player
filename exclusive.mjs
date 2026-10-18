@@ -1,8 +1,11 @@
 // Exclusive (bit-perfect) output: ffmpeg s32le at the source rate -> native/cadence-wasapi.exe, which owns the
 // device in WASAPI exclusive mode. Speaks the worklet's message protocol, so renderer/engine.js drives both alike:
-// in 'open' 'close' 'stop' 'play' 'queue' 'playing' 'volume' 'config'; out 'pos' 'switch' 'ended' 'format' 'refused' 'fail'.
+// in 'open' 'gain' 'close' 'stop' 'play' 'queue' 'playing' 'volume' 'dsp' 'config';
+// out 'pos' 'switch' 'ended' 'format' 'refused' 'fail' 'dsp' (64-bit DSP / DAC volume state) 'uvol' (DAC volume changed outside).
+// The helper runs the same DSP chain as the Web Audio graph in 64-bit (native/dsp.cs).
 const MAX_CRASHES = 3;
 const gain = v => (Number.isFinite(+v) ? Math.min(1, Math.max(0, +v)) : 0); // NaN/inf -> silence, never > unity
+const trackGain = v => (Number.isFinite(+v) ? Math.min(16, Math.max(0, +v)) : 1); // ReplayGain may lift a quiet track
 const AHEAD_SEC = 2; // audio handed to the helper ahead of playback; also how late a queued next track can still be swapped
 
 export class Exclusive {
@@ -10,7 +13,7 @@ export class Exclusive {
   constructor({ spawn, send, ack }) {
     Object.assign(this, { spawnHelper: spawn, send, ack });
     this.streams = new Map();
-    this.device = ''; this.volume = 1; this.crashes = 0; this.retryAt = 0; this.playing = false; this.epoch = 0;
+    this.device = ''; this.volume = 1; this.dsp = ''; this.crashes = 0; this.retryAt = 0; this.playing = false; this.epoch = 0;
     this.reset();
   }
   reset() {
@@ -22,7 +25,7 @@ export class Exclusive {
   // ---------- from the decoder ----------
   stream(id) {
     let s = this.streams.get(id);
-    if (!s) this.streams.set(id, s = { id, rate: 44100, bits: 16, q: [], ended: false });
+    if (!s) this.streams.set(id, s = { id, rate: 44100, bits: 16, q: [], ended: false, gain: 1 });
     return s;
   }
   open(id, rate, bits) { Object.assign(this.stream(id), { rate, bits }); }
@@ -40,10 +43,16 @@ export class Exclusive {
     switch (m.type) {
       case 'config': this.device = m.device || ''; this.crashes = 0; this.retryAt = 0; break;
       case 'volume': this.volume = gain(m.value); this.write('V', this.volume); break;
+      case 'open': this.stream(m.id).gain = trackGain(m.gain); break;
+      case 'gain': { const s = this.streams.get(m.id); if (s) { s.gain = trackGain(m.gain); if (this.segs.some(g => g.s === s)) this.write('G', s.id, s.gain); } break; }
+      case 'dsp': if (typeof m.text === 'string' && m.text.length < 65536) { this.dsp = m.text; this.write('S', m.text); } break;
       case 'playing': this.playing = m.value; this.write(m.value ? 'R' : 'P'); break;
       case 'play': {
         const s = this.streams.get(m.id);
         if (!s) break;
+        // the previous helper is still handing the DAC volume back: start after it is gone, or the new one would read
+        // that hand-back as the user turning the volume (and move the slider)
+        if (this.dying) { this.deferred = m; break; }
         if (!this.ensureHelper()) break;
         this.write('X', ++this.epoch);
         this.reset();
@@ -53,7 +62,7 @@ export class Exclusive {
       }
       case 'queue': this.next = m.id; this.awaitingNext = false; this.pump(); break;
       case 'close': this.cut(m.id); break;
-      case 'stop': this.kill(); this.reset(); break; // releases the device for other apps
+      case 'stop': this.kill(); this.reset(); this.deferred = null; break; // releases the device for other apps
     }
   }
 
@@ -89,6 +98,7 @@ export class Exclusive {
   startFeeding(s) {
     this.feeding = s;
     this.segs.push({ s, start: this.written, len: 0 });
+    this.write('G', s.id, s.gain ?? 1);
     this.write('F', s.rate, s.bits, s.id);
     this.pump();
   }
@@ -133,10 +143,27 @@ export class Exclusive {
     p.on('error', e => this.fail(0, e.message));
     p.on('exit', code => { if (this.proc === p) { this.proc = null; this.crashes++; this.retryAt = Date.now() + Math.min(250 * 2 ** this.crashes, 4000); this.fail(0, err.trim().split('\n').pop() || `helper exited (${code})`); } });
     this.write('V', this.volume);
+    if (this.dsp) this.write('S', this.dsp);
     this.write(this.playing ? 'R' : 'P');
     return true;
   }
-  kill() { const p = this.proc; this.proc = null; p?.kill(); }
+  // closing stdin lets the helper hand the DAC volume back to where it was before it exits; a hung one is killed
+  kill() {
+    const p = this.proc; this.proc = null;
+    if (!p) return;
+    this.dying = p;
+    const gone = () => {
+      if (this.dying !== p) return;
+      this.dying = null;
+      const m = this.deferred, n = this.next; this.deferred = null;
+      if (!m) return;
+      this.msg(m);
+      if (n != null && n !== m.id) this.msg({ type: 'queue', id: n }); // queued while waiting: play wiped it
+    };
+    p.once?.('exit', gone);
+    try { p.stdin.end?.(); } catch {}
+    setTimeout(() => { try { p.kill(); } catch {} gone(); }, 1500).unref?.();
+  }
   fail(id, message) {
     this.kill();
     this.reset();
@@ -148,6 +175,12 @@ export class Exclusive {
     if (kind === 'open') { const [rate, bits, container] = rest.map(Number); if (!ok(+a, rate, bits, container)) return; this.send({ type: 'format', id: +a, rate, bits, container }); return; }
     if (kind === 'refuse') return ok(+a) ? this.refuse(+a, rest.join(' ')) : undefined;
     if (kind === 'fail') return this.fail(a, rest.join(' '));
+    if (kind === 'dsp') {
+      const [digital, dac, hw, boost] = rest, num = x => (x === '-' ? null : x === '-inf' ? -Infinity : +x);
+      if (![digital, boost].map(num).every(v => v === -Infinity || Number.isFinite(v))) return;
+      return this.send({ type: 'dsp', active: a === '1', digitalDb: num(digital), dacDb: num(dac), hw: hw === '1', boostDb: num(boost) });
+    }
+    if (kind === 'uvol') return ok(+a) ? this.send({ type: 'uvol', value: gain(+a) }) : undefined;
     if (kind !== 'pos' || +a !== this.epoch) return;
     if (!ok(+rest[0]) || +rest[0] < 0) return;
     this.crashes = 0; // the helper is alive and playing
@@ -182,11 +215,13 @@ export class Exclusive {
   write(op, ...v) {
     const p = this.proc;
     if (!p || p.stdin.destroyed) return;
-    if (op === 'D') {
-      const h = Buffer.alloc(5); h.write('D'); h.writeInt32LE(v[0].length, 1);
-      p.stdin.write(h); p.stdin.write(v[0]);
+    if (op === 'D' || op === 'S') {
+      const data = op === 'S' ? Buffer.from(v[0], 'utf8') : v[0];
+      const h = Buffer.alloc(5); h.write(op); h.writeInt32LE(data.length, 1);
+      p.stdin.write(h); p.stdin.write(data);
       return;
     }
+    if (op === 'G') { const b = Buffer.alloc(9); b.write('G'); b.writeInt32LE(v[0], 1); b.writeFloatLE(v[1], 5); p.stdin.write(b); return; }
     const b = Buffer.alloc(1 + 4 * v.length);
     b.write(op);
     v.forEach((x, i) => op === 'V' ? b.writeFloatLE(x, 1) : b.writeInt32LE(x, 1 + 4 * i));
