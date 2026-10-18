@@ -98,7 +98,7 @@ export function settingsView() {
     group('Audio',
       row('Output device', null, devSel),
       row('Exclusive output (bit-perfect)', "WASAPI exclusive at each file's own sample rate and bit depth, bypassing the Windows mixer. EQ, tone, balance, reverb, limiter and ReplayGain run in 64-bit with dither; the volume drives the DAC's own hardware volume, with headroom for EQ boosts made up on the DAC. All flat = bit-perfect at any volume. Tempo, crossfade and visualizers are off. Other apps can't use the device meanwhile.", sw('exclusive', v => { dispatchEvent(new Event('cadence:xo-reset')); engine.xoFallback = false; engine.setExclusive(v); })),
-      row('Output sample rate', 'Auto follows the device. Everything is resampled once in ffmpeg with a long windowed-sinc filter.', sel('sampleRate', [[0, 'Auto (device)'], [44100, '44.1 kHz'], [48000, '48 kHz'], [88200, '88.2 kHz'], [96000, '96 kHz'], [176400, '176.4 kHz'], [192000, '192 kHz']], () => engine.setOutput(set.device, set.sampleRate))),
+      row('Output sample rate', 'Auto follows the device. Everything is resampled once in ffmpeg with the SoX very-high-quality resampler.', sel('sampleRate', [[0, 'Auto (device)'], [44100, '44.1 kHz'], [48000, '48 kHz'], [88200, '88.2 kHz'], [96000, '96 kHz'], [176400, '176.4 kHz'], [192000, '192 kHz']], () => engine.setOutput(set.device, set.sampleRate))),
       row('Replay Gain', null, sel('rgMode', [['off', "Don't apply"], ['track', 'Track gain'], ['album', 'Album gain']], applyRg)),
       row('Prevent clipping using peak', null, sw('preventClip', applyRg)),
       row('RG preamp', null, slider('rgPreamp', -15, 15, 0.5, v => (v > 0 ? '+' : '') + v + ' dB', applyRg)),

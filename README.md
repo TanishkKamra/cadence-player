@@ -6,7 +6,7 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
 
 ## What's in it
 
-**Playback engine**: ffmpeg decodes every format (FLAC up to 32-bit/384 kHz, ALAC, MP3, AAC, Opus, Vorbis, WAV/AIFF, APE, WavPack, DSD, WMA, …) to 32-bit float. The decoded audio runs through an AudioWorklet player and then the Web Audio DSP chain.
+**Playback engine**: ffmpeg decodes every format (FLAC up to 32-bit/384 kHz, ALAC, MP3, AAC, Opus, Vorbis, WAV/AIFF, APE, WavPack, DSD, WMA, …) to 32-bit float. Rate conversion uses the SoX resampler (libsoxr) at very high quality, as does. The decoded audio runs through an AudioWorklet player and then the Web Audio DSP chain.
 - Sample-accurate gapless playback, crossfade (no fading / different albums only / all / shuffled only), and short or full crossfade on manual skips.
 - Fade on play/pause and seek, plus optional silence between tracks.
 - ReplayGain (track or album, with preamps and peak-based clip prevention), plus tempo (0.5–2×) and pitch (±12 semitones).
@@ -62,13 +62,12 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
 
 ## Limitations and known differences from 
 - **No bit-perfect or WASAPI-exclusive output.** Audio goes through Windows' shared mixer at 32-bit float. Web Audio can't take exclusive control of the device.
-- **Resampling quality differs.** SoX resampler isn't in the bundled ffmpeg, so a 64-tap windowed-sinc resampler is used instead.
 - **Phone-only features have no desktop version.** That covers Chromecast/DLNA, Android Auto, the lock screen and widgets. The mini player stands in for the widgets.
 - **Last.fm scrobbling isn't supported.** It needs an API key and secret registered by the user; ListenBrainz needs only a token.
 
 ## Development
 ```
-npm install
+npm install         # also fetches the ffmpeg build (libsoxr) into native/ffmpeg, checksum-verified
 npm start           # run from source
 npm test            # lyrics parser + queue self-checks
 npm run dist        # build release\Cadence-win32-x64\Cadence.exe
