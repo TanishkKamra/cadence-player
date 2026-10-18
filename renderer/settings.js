@@ -116,6 +116,7 @@ export function settingsView() {
     group('Look and feel',
       row('Theme', null, sel('theme', [['dark', 'Dark'], ['black', 'Black (OLED)'], ['light', 'Light'], ['auto', 'Follow Windows']], () => crossfade(applyTheme))),
       row('Animations', null, sel('animations', [['normal', 'Normal'], ['fast', 'Fast'], ['off', 'Off']], applyTheme)),
+      row('Window material', 'Windows 11 backdrop behind the glass: Mica tints with your wallpaper, Acrylic lets the desktop show through.', sel('windowMaterial', [['none', 'None'], ['mica', 'Mica'], ['acrylic', 'Acrylic']], () => crossfade(applyTheme))),
       row('Album art animation', 'Slide the cover on track change.', sw('artAnim', applyTheme)),
       row('Scroll long titles', null, sw('marquee', applyTheme)),
       row('<<< >>> buttons', 'Jump between albums/folders, or seek ±10 seconds.', sel('proButtons', [['category', 'Previous / next album'], ['seek', '−10 / +10 seconds']])),

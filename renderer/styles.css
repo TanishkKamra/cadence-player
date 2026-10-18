@@ -1291,3 +1291,8 @@ body[data-theme="light"] .az.scrub { background: rgb(255 255 255 / .7); }
 
 /* Cadence Beta build: a small tag next to the name */
 .brand-tag { margin-left: 2px; padding: 2px 7px; border-radius: 999px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--accent)); background: rgb(var(--accent) / .14); box-shadow: inset 0 0 0 1px rgb(var(--accent) / .35); }
+
+/* ================================================================ v0.9 Liquid Glass on a native backdrop (Beta) */
+/* Mica / Acrylic: the page turns see-through so the Windows backdrop shows; the album glow stays as a tint on top */
+html:has(> body.mat-mica), html:has(> body.mat-acrylic), body.mat-mica, body.mat-acrylic { background: transparent; }
+body.mat-mica #bg, body.mat-acrylic #bg { opacity: .55; }

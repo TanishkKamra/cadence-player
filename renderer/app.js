@@ -53,10 +53,12 @@ export function applyTheme() {
   r.setProperty('--bg-sat', set.bgSaturation);
   r.setProperty('--bg-grad', (set.bgGradient / 8).toFixed(3));
   const bg = getComputedStyle(b).getPropertyValue('--bg').trim();
-  api.send('win:theme', { symbolColor: dark ? '#e8e8ee' : '#1b1b1f', bg });
+  api.send('win:theme', { symbolColor: dark ? '#e8e8ee' : '#1b1b1f', bg, material: set.windowMaterial });
   if (engine) import('./player.js').then(m => m.paintBackdrop());
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => set.theme === 'auto' && applyTheme());
+// the backdrop Windows actually applied (it falls back to none on older builds): the page turns see-through only then
+api.on('win:material', m => { for (const k of ['none', 'mica', 'acrylic']) document.body.classList.toggle('mat-' + k, k === m); });
 export function applyAccentFromArt() {
   const img = P.art?.querySelector('img:not(.leave)');
   import('./player.js').then(m => m.applyAccent(img || null));
