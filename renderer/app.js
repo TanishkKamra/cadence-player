@@ -1,6 +1,7 @@
 // Boot, theming, OS integration, keyboard, phone import, backup.
 import { Engine } from './engine.js';
-import { h, $, icon, PATHS, debounce, fmtTime } from './util.js';
+import { h, $, icon, PATHS, debounce, fmtTime, setIconWeight } from './util.js';
+import { applyDesignStyles, startDesign } from './designs/index.js';
 import {
   S, set, hooks, setEngine, engine, stat, saveSettings, saveStats, savePlaylists, saveState, flushAll, buildIndex, makeEntries,
   peekNext, commit, allowXf, skipFadeSec, titleOf, artistOf, base, DEFAULTS,
@@ -59,6 +60,13 @@ export function applyTheme() {
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => set.theme === 'auto' && applyTheme());
 // the backdrop Windows actually applied (it falls back to none on older builds): the page turns see-through only then
 api.on('win:material', m => { for (const k of ['none', 'mica', 'acrylic']) document.body.classList.toggle('mat-' + k, k === m); });
+// designs load once at startup, so switching reloads the window and the session continues where it was
+export function switchDesign() {
+  sessionStorage.setItem('cadence:design-switch', JSON.stringify({ playing: !!engine?.playing, view: S.view?.name }));
+  flushAll();
+  document.body.classList.add('design-out');
+  setTimeout(() => location.reload(), set.animations === 'off' ? 0 : 200);
+}
 export function applyAccentFromArt() {
   const img = P.art?.querySelector('img:not(.leave)');
   import('./player.js').then(m => m.applyAccent(img || null));
@@ -338,7 +346,11 @@ async function boot() {
   S.playlists = cleanPlaylists(await api.invoke('store:get', 'playlists'));
   S.streams = cleanStreams(await api.invoke('store:get', 'streams'));
   S.bookmarks = cleanBookmarks(await api.invoke('store:get', 'bookmarks'));
-  const state = set.resume ? cleanState(await api.invoke('store:get', 'state')) : null;
+  // a design switch reloads the window: bring the session back even when "resume" is off
+  let switched = null; try { switched = JSON.parse(sessionStorage.getItem('cadence:design-switch')); } catch {}
+  sessionStorage.removeItem('cadence:design-switch');
+  const state = set.resume || switched ? cleanState(await api.invoke('store:get', 'state')) : null;
+  setIconWeight((await applyDesignStyles(set.design)).icons);
   applyTheme();
   if (api.beta) $('.brand').append(h('span', { class: 'brand-tag' }, 'Beta'));
 
@@ -432,13 +444,16 @@ async function boot() {
     if (!cur && state.list?.[state.li]) cur = S.list.find(e => e.track.path === state.list[state.li]);
     S.li = cur ? S.list.indexOf(cur) : Math.min(Math.max(0, state.li || 0), S.list.length - 1);
     const e = cur || S.list[S.li];
-    if (e) eng.load(e, { start: e.track.path === state.cur ? state.pos || 0 : 0, play: false });
+    if (e) eng.load(e, { start: e.track.path === state.cur ? state.pos || 0 : 0, play: !!switched?.playing });
   }
   S.view = { name: 'songs' };
   render();
   updatePlayer();
   sendThumbar();
   watchDevices();
+  if (switched?.view && switched.view !== 'songs') try { go(switched.view); } catch {}
+  // the design's own scripts hook into the player and views built above; a broken one must not stop Cadence
+  startDesign(set.design, window.cadence).then(applyAccentFromArt).catch(e => console.error('design', e));
 
   $('#nav-back').append(icon('back', 'sm'));
   $('#nav-back').addEventListener('click', back);

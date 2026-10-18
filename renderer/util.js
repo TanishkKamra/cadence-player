@@ -1,4 +1,8 @@
-import { ICONS as P } from './icons.js';
+import { ICONS as LIGHT } from './icons.js';
+import { ICONS as REGULAR } from './icons-regular.js';
+let P = LIGHT;
+// some designs draw Phosphor Regular instead of Light; set once at startup, before anything is rendered
+export const setIconWeight = w => { P = w === 'regular' ? REGULAR : LIGHT; };
 // DOM helper: text children are always inserted as text nodes (tags/lyrics are untrusted).
 export function h(tag, props, ...kids) {
   const el = document.createElement(tag);
@@ -17,7 +21,7 @@ export function h(tag, props, ...kids) {
 }
 export const $ = (s, root = document) => root.querySelector(s);
 
-export const PATHS = P;
+export const PATHS = LIGHT; // taskbar thumbnail buttons
 export function icon(name, cls = '') {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('viewBox', '0 0 256 256');

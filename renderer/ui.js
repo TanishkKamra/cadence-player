@@ -211,7 +211,7 @@ export const confirm = (title, text, label = 'OK', danger) =>
 // ---------- inputs ----------
 export function rangeInput({ min, max, step, value, onInput, onChange, cls = '', label }) {
   const r = h('input', { type: 'range', class: 'range ' + cls, min, max, step, value, 'aria-label': label });
-  const paint = () => r.style.setProperty('--p', ((r.value - min) / (max - min) * 100) + '%');
+  const paint = () => { const f = (r.value - min) / (max - min); r.style.setProperty('--p', (f * 100) + '%'); r.style.setProperty('--pn', f.toFixed(4)); }
   paint();
   r.addEventListener('input', () => { paint(); onInput(+r.value); });
   if (onChange) r.addEventListener('change', () => onChange(+r.value));
@@ -247,6 +247,7 @@ export function knob({ label, min, max, step = 0.1, value, def = 0, fmt = v => v
     arc.setAttribute('d', a >= zeroA ? arcPath(zeroA, Math.max(a, zeroA + 0.01)) : arcPath(a, zeroA));
     const r = (a - 90) * Math.PI / 180;
     dot.setAttribute('cx', C + 17 * Math.cos(r)); dot.setAttribute('cy', C + 17 * Math.sin(r));
+    dial.style.setProperty('--kr', a.toFixed(1) + 'deg'); // metal designs turn the knob cap
     val.textContent = fmt(v);
     dial.setAttribute('aria-valuenow', v); dial.setAttribute('aria-valuetext', val.textContent);
   };

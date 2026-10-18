@@ -1,0 +1,437 @@
+/* ==========================================================================================================
+   FUSION C: LIT CHASSIS. Loaded after styles.css, scoped to body.fc (index.html), colours from fusion.js.
+   Soul: a lit instrument that wears the song. Four materials only: GROUND, PLATE, KEY, WELL. No glass, no chrome, no wood.
+   Roles set per track by fusion.js (all "r g b"): --ink-a/b/c  --deep  --accent  --lamp  --on-lamp
+   Radius ladder 5 / 8 / 12 / 20.  Type: Geist + Geist Mono.  Icons: Phosphor Light.  Idle is still.
+   ========================================================================================================== */
+@font-face { font-family: "Instrument Serif"; src: url("../../fonts/InstrumentSerif-Italic.woff2") format("woff2"); font-style: italic; font-weight: 400; font-display: swap; } /* OFL: fonts/InstrumentSerif-OFL.txt */
+@property --r { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+/* song roles live on :root so fusion.js (inline on <html>) can set them; body.fc must not redeclare them */
+:root { --ink-a: 255 138 61; --ink-b: 150 120 255; --ink-c: 80 200 220; --deep: 20 17 24; --accent: 255 160 80; --lamp: 255 168 84; --on-lamp: 8 8 10; }
+body.fc {
+  --r1: 5px; --r2: 8px; --r3: 12px; --r4: 20px;
+  --font: "Geist", "Segoe UI Variable Display", "Segoe UI", "Nirmala UI", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "Cascadia Mono", monospace;
+  --ground: rgb(var(--deep));
+  --plate: color-mix(in oklab, rgb(var(--deep)) 93%, #fff);
+  --plate-hi: color-mix(in oklab, rgb(var(--deep)) 87%, #fff);
+  --key-a: color-mix(in oklab, rgb(var(--deep)) 80%, #fff);
+  --key-b: color-mix(in oklab, rgb(var(--deep)) 90%, #fff);
+  --key-edge: color-mix(in oklab, rgb(var(--deep)) 55%, #000);
+  --well: color-mix(in oklab, rgb(var(--deep)) 72%, #000);
+  --text: color-mix(in oklab, rgb(var(--deep)) 4%, #fff);
+  --text-2: color-mix(in oklab, rgb(var(--deep)) 28%, #fff);
+  --text-3: color-mix(in oklab, rgb(var(--deep)) 42%, #fff);
+  --hair: rgb(255 255 255 / .09); --hair-2: rgb(255 255 255 / .17);
+  --lit: inset 0 1px 0 rgb(255 255 255 / .09);
+  --glow: 0 0 14px rgb(var(--lamp) / .5);
+  --lampt: color-mix(in oklab, rgb(var(--lamp)) 82%, #fff);
+  --bg: var(--ground); --surface: rgb(255 255 255 / .05); --surface-2: rgb(255 255 255 / .09); --surface-3: rgb(255 255 255 / .14);
+  --stroke: var(--hair-2); --stroke-strong: rgb(255 255 255 / .34); --shell: transparent; --core: transparent; --chip: transparent;
+  --r-s: var(--r2); --r-m: var(--r3); --r-l: var(--r3); --r-xl: var(--r4);
+  --travel: 3px;
+  --lbl: 600 10.5px/1 var(--mono);
+  font-family: var(--font);
+}
+body.fc[data-theme="black"] {
+  --plate: color-mix(in oklab, rgb(var(--deep)) 90%, #fff); --plate-hi: color-mix(in oklab, rgb(var(--deep)) 82%, #fff);
+  --key-a: color-mix(in oklab, rgb(var(--deep)) 74%, #fff); --key-b: color-mix(in oklab, rgb(var(--deep)) 86%, #fff);
+  --well: #000;
+}
+body.fc[data-theme="light"] {
+  --plate: color-mix(in oklab, rgb(var(--deep)) 35%, #fff); --plate-hi: #fff;
+  --key-a: #fff; --key-b: color-mix(in oklab, rgb(var(--deep)) 60%, #fff); --key-edge: color-mix(in oklab, rgb(var(--deep)) 78%, #5b5348);
+  --well: color-mix(in oklab, rgb(var(--deep)) 86%, #5b5348);
+  --text: #17130f; --text-2: rgb(23 19 15 / .76); --text-3: rgb(23 19 15 / .62);
+  --hair: rgb(23 19 15 / .12); --hair-2: rgb(23 19 15 / .22);
+  --lit: inset 0 1px 0 rgb(255 255 255 / .9);
+  --glow: 0 0 0 transparent; --lampt: rgb(var(--accent));
+  --surface: rgb(23 19 15 / .05); --surface-2: rgb(23 19 15 / .08); --surface-3: rgb(23 19 15 / .12);
+  --stroke: var(--hair-2); --stroke-strong: rgb(23 19 15 / .4);
+}
+html:has(body.fc) { background: rgb(var(--deep)); }
+body.fc { color: var(--text); }
+
+/* ---------- 1. GROUND: three static ink pools, vignette, grain. Never animated at rest. ---------- */
+body.fc #bg { display: none; }
+#ink { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: rgb(var(--deep)); }
+.ink-l { position: absolute; inset: 0; background-size: 100% 100%;
+  background-image: radial-gradient(52% 64% at 90% 22%, rgb(var(--ink-a) / .74), transparent 72%), radial-gradient(58% 56% at 2% 100%, rgb(var(--ink-b) / .64), transparent 72%), radial-gradient(50% 46% at 34% 0%, rgb(var(--ink-c) / .5), transparent 70%), linear-gradient(rgb(var(--deep)), rgb(var(--deep))); }
+.ink-l.pouring { --r: 0px; will-change: mask-image;
+  -webkit-mask-image: radial-gradient(circle at var(--ox) var(--oy), #000 calc(var(--r) - 140px), transparent var(--r)),
+                      radial-gradient(circle at calc(var(--ox) - 90px) calc(var(--oy) + 70px), #000 calc(var(--r) * .86 - 120px), transparent calc(var(--r) * .86)),
+                      radial-gradient(circle at calc(var(--ox) + 60px) calc(var(--oy) - 110px), #000 calc(var(--r) * .94 - 160px), transparent calc(var(--r) * .94));
+          mask-image: radial-gradient(circle at var(--ox) var(--oy), #000 calc(var(--r) - 140px), transparent var(--r)),
+                      radial-gradient(circle at calc(var(--ox) - 90px) calc(var(--oy) + 70px), #000 calc(var(--r) * .86 - 120px), transparent calc(var(--r) * .86)),
+                      radial-gradient(circle at calc(var(--ox) + 60px) calc(var(--oy) - 110px), #000 calc(var(--r) * .94 - 160px), transparent calc(var(--r) * .94)); }
+#ink::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(var(--deep) / .5), transparent 16%, transparent 72%, rgb(var(--deep) / .55)), radial-gradient(120% 100% at 50% 40%, transparent 55%, rgb(var(--deep) / .5)); }
+/* the lamp lights the room: a cast from the player's cover, only while playing (opacity is the only thing that moves) */
+#ink::before { content: ""; position: absolute; inset: 0; z-index: 1; opacity: 0; transition: opacity .9s var(--ease-out);
+  background: radial-gradient(46% 50% at 86% 34%, rgb(var(--lamp) / .32), transparent 70%); }
+body.fc.fc-on #ink::before { opacity: 1; }
+body.fc[data-theme="light"] #ink::after { background: linear-gradient(180deg, rgb(255 255 255 / .3), transparent 16%, transparent 80%, rgb(255 255 255 / .35)); }
+body.fc[data-theme="light"] #ink::before { background: radial-gradient(46% 50% at 86% 34%, rgb(var(--lamp) / .2), transparent 70%); }
+body.fc::after { opacity: .05; }
+body.fc[data-theme="light"]::after { mix-blend-mode: multiply; opacity: .04; }
+
+body.fc[data-theme] {
+  /* ---------- type: engraved labels, display titles ---------- */
+  & .side-h, & .list-head, & .menu .mh, & .set-group h2, & .q-sec, & .fc-lbl, & .fc-read, & .times .ctx, & .eq-tabs button, & .brand-tag {
+    font: var(--lbl); letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); text-shadow: 0 1px 0 rgb(255 255 255 / .06); }
+  &[data-theme="light"] .side-h, &[data-theme="light"] .list-head { text-shadow: 0 1px 0 rgb(255 255 255 / .8); }
+  & .view-title .kicker { font: var(--lbl); letter-spacing: .16em; text-transform: uppercase; color: var(--lampt); background: none; padding: 0; box-shadow: none; text-shadow: 0 0 12px rgb(var(--lamp) / .35); margin-bottom: 8px; display: block; }
+  & .view-title h1 { font-family: var(--font); font-weight: 800; font-size: clamp(40px, 4.6vw, 68px); letter-spacing: -.045em; line-height: .98; color: var(--text); }
+  & .view-title .sub { font: 500 12.5px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+  & .section-h h2, & .empty h2 { font-weight: 650; letter-spacing: -.03em; font-size: 24px; }
+  & .row .num, & .row .dur, & .row .quality, & .side-item .count, & .set-row .ctl output, & .k-val, & .eq-band .val { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  & .card .t1 { font-weight: 650; letter-spacing: -.015em; }
+  & .card .t2, & .row .artist, & .row .album, & .qrow .t2 { color: var(--text-2); }
+  & :focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; border-radius: var(--r1); }
+
+  /* ---------- 2. PLATE ---------- */
+  & :is(#sidebar, #player, .set-group, .fx-card, .eq-wrap, .pb-panel) {
+    background: radial-gradient(120% 50% at 50% 0%, rgb(var(--lamp) / .07), transparent 70%), linear-gradient(180deg, color-mix(in oklab, var(--plate) 92%, #fff), var(--plate) 40%); backdrop-filter: none; border: 0; border-radius: var(--r4);
+    box-shadow: inset 0 0 0 1px var(--hair), var(--lit), 0 22px 40px -26px rgb(0 0 0 / .7); transition: background-color 1.4s var(--ease-out); }
+  & #sidebar { border-radius: var(--r3); }
+  & :is(.set-group, .fx-card) { border-radius: var(--r3); }
+  & :is(.drawer, .menu, .dialog, .toast, .tip, #__id) {
+    background: linear-gradient(90deg, rgb(var(--ink-a)), rgb(var(--ink-b)), rgb(var(--ink-c))) 0 0 / 100% 3px no-repeat, var(--plate-hi);
+    backdrop-filter: none; border: 0; border-radius: var(--r3);
+    box-shadow: inset 0 0 0 1px var(--hair-2), var(--lit), 0 34px 70px -22px rgb(0 0 0 / .8); }
+  & :is(#player, .drawer, .menu, .dialog, .toast, .side-pill, .cta)::before { display: none; }
+  & :is(.drawer, .dialog, #__id) { border-radius: var(--r4); }
+  & :is(.toast, #__id) { border-radius: var(--r3); background: var(--well); box-shadow: inset 0 0 0 1px var(--hair-2), inset 0 2px 6px rgb(0 0 0 / .45), 0 18px 40px -14px rgb(0 0 0 / .7); }
+  & .tip { background: var(--plate-hi); border-radius: var(--r1); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; }
+  & .scrim { backdrop-filter: none; background: rgb(var(--deep) / .72); }
+
+  /* ---------- 3. KEY: every pressable. Raised with 3px travel; :active collapses it. ---------- */
+  & :is(.icon-btn, .pill-btn, .t-btn, .tb-btn, .tb-select, .dropdown, .cta, .ov-btn, .seg button, .eq-tabs button, .toggle-btn, .preset-btn, .az button, .list-head button, .row .like, .row .more, .qrow .x, .side-h-btn, .side-add) { --kp: var(--travel);
+    transition: transform var(--spring-snappy-dur, .26s) var(--spring-snappy, var(--ease-out)), box-shadow var(--spring-snappy-dur, .26s) var(--spring-snappy, var(--ease-out)), background-color .2s, color .2s; }
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn:not(.l), .ov-btn) {
+    background: linear-gradient(180deg, var(--key-a), var(--key-b)); color: var(--text-2); border-radius: var(--r2); border: 0;
+    box-shadow: inset 0 0 0 1px var(--hair), var(--lit), 0 var(--kp) 0 var(--key-edge), 0 calc(var(--kp) + 5px) 12px -4px rgb(0 0 0 / .55); }
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn:not(.l), .ov-btn):hover { color: var(--text); background: linear-gradient(180deg, color-mix(in oklab, var(--key-a) 88%, #fff), var(--key-b)); }
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn, .ov-btn):active { transform: translateY(var(--kp)); box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 2px rgb(0 0 0 / .4), 0 0 0 var(--key-edge), 0 2px 5px -2px rgb(0 0 0 / .5); }
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn, .ov-btn)[disabled], & .icon-btn[disabled] { opacity: .38; }
+  & .icon-btn { width: 34px; height: 34px; margin-bottom: var(--travel); }
+  & :is(.icon-btn, .pill-btn, .toggle-btn).on, & .tb-btn.on { color: var(--lampt); box-shadow: inset 0 0 0 1px rgb(var(--lamp) / .45), var(--lit), 0 var(--kp) 0 var(--key-edge), 0 0 18px -4px rgb(var(--lamp) / .5); }
+  & :is(.icon-btn, .pill-btn, .toggle-btn).on::after { content: ""; position: absolute; top: 4px; right: 4px; width: 4px; height: 4px; border-radius: 50%; background: rgb(var(--lamp)); box-shadow: var(--glow); }
+  & :is(.pill-btn, .toggle-btn, .icon-btn) { position: relative; }
+  & .pill-btn { width: 56px; height: 38px; margin-bottom: var(--travel); }
+  & .tb-btn, & .cta, & .tb-select, & .dropdown { height: 40px; border-radius: var(--r2); font-weight: 600; letter-spacing: -.005em; margin-bottom: var(--travel); }
+  & .dropdown.sm { height: 30px; }
+  & :is(.tb-btn.primary, .cta.primary, .cta.accent, .tb-btn.accent) { background: linear-gradient(180deg, color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 14%), rgb(var(--lamp))); color: rgb(var(--on-lamp));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 var(--kp) 0 color-mix(in oklab, rgb(var(--lamp)) 55%, #000), 0 calc(var(--kp) + 6px) 18px -4px rgb(var(--lamp) / .55); }
+  & :is(.tb-btn.primary, .cta.primary, .cta.accent):hover { background: linear-gradient(180deg, color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 26%), color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 6%)); color: rgb(var(--on-lamp)); }
+  & :is(.tb-btn.primary, .cta.primary, .cta.accent):active { box-shadow: inset 0 1px 2px rgb(0 0 0 / .3), 0 0 0 transparent; }
+  & .cta.primary .ic, & .tb-btn.primary .ic, & .cta.accent .ic { color: inherit; }
+  & .tb-btn.danger.primary { background: linear-gradient(180deg, #ff8a74, #ff6a4d); color: #1a0703; box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 var(--kp) 0 #8a2a17; }
+  & :is(.icon-btn, .pill-btn, .tb-btn, .cta, .dropdown, .tb-select) .ic { color: inherit; }
+  & .seg { background: var(--well); border-radius: var(--r2); padding: 3px; box-shadow: inset 0 2px 6px rgb(0 0 0 / .45), inset 0 0 0 1px var(--hair); }
+  & .seg button { background: none; box-shadow: none; border-radius: var(--r1); color: var(--text-2); }
+  & .seg button.on { background: linear-gradient(180deg, var(--key-a), var(--key-b)); color: var(--lampt); box-shadow: inset 0 0 0 1px rgb(var(--lamp) / .4), var(--lit), 0 2px 0 var(--key-edge); }
+  & .eq-tabs button { background: none; box-shadow: none; margin: 0; }
+  & .eq-tabs button.on { color: var(--lampt); box-shadow: inset 0 -2px 0 rgb(var(--lamp)); background: none; text-shadow: 0 0 12px rgb(var(--lamp) / .5); }
+  & .az button, & .list-head button, & .row .like, & .row .more, & .qrow .x, & .side-h-btn, & .side-add { background: none; box-shadow: none; }
+  & .az button:hover, & .az button.on { color: var(--lampt); }
+
+  /* ---------- 4. WELL: recessed readouts ---------- */
+  & .search { background: var(--well); box-shadow: inset 0 2px 6px rgb(0 0 0 / .45), inset 0 0 0 1px var(--hair), 0 1px 0 rgb(255 255 255 / .05); border-radius: var(--r2); height: 34px; }
+  & .search:focus-within { box-shadow: inset 0 2px 6px rgb(0 0 0 / .45), inset 0 0 0 1px rgb(var(--lamp) / .7), 0 0 0 3px rgb(var(--lamp) / .12); }
+  & .dialog input[type=text], & .set-text, & .view-head input, & .toolbar input { background: var(--well); border-radius: var(--r2); box-shadow: inset 0 2px 6px rgb(0 0 0 / .45), inset 0 0 0 1px var(--hair); }
+  & .chip.meta { padding: 0 10px; height: 24px; display: inline-flex; align-items: center; border-radius: var(--r1); background: var(--well); box-shadow: inset 0 1px 4px rgb(0 0 0 / .5), inset 0 0 0 1px var(--hair); font: 500 11px/1 var(--mono); letter-spacing: .06em; color: var(--text-2); }
+  & .chip.meta.hires { color: var(--hires, #e9c46a); box-shadow: inset 0 1px 4px rgb(0 0 0 / .5), inset 0 0 0 1px rgb(233 196 106 / .45); }
+  &[data-theme="light"] .chip.meta.hires { color: #7a4d00; }
+  & .switch { background: var(--well); box-shadow: inset 0 2px 5px rgb(0 0 0 / .5), inset 0 0 0 1px var(--hair); border-radius: var(--r2); }
+  & .switch::after { background: linear-gradient(180deg, var(--key-a), var(--key-b)); box-shadow: inset 0 1px 0 rgb(255 255 255 / .2), 0 2px 0 var(--key-edge), 0 4px 8px rgb(0 0 0 / .5); border-radius: 6px; }
+  & .switch.on { background: color-mix(in oklab, var(--well) 70%, rgb(var(--lamp))); box-shadow: inset 0 2px 5px rgb(0 0 0 / .4), inset 0 0 0 1px rgb(var(--lamp) / .6), 0 0 14px -4px rgb(var(--lamp) / .6); }
+  & .switch.on::after { background: linear-gradient(180deg, rgb(var(--lamp)), color-mix(in oklab, rgb(var(--lamp)) 85%, #000)); }
+
+  /* ---------- sidebar: plate, place-marker, numbered channels ---------- */
+  & #sidebar { counter-reset: ch; padding: 8px 8px 18px; }
+  & .side-item { border-radius: var(--r2); color: var(--text-2); min-height: 40px; position: relative; }
+  & .side-item:hover { background: var(--surface); color: var(--text); }
+  & .side-item.active { background: none; color: var(--text); font-weight: 600; }
+  & .side-pill { border-radius: var(--r2); background: linear-gradient(90deg, rgb(var(--lamp) / .2), rgb(var(--lamp) / .04) 80%); box-shadow: inset 3px 0 0 rgb(var(--lamp)), 0 0 18px -6px rgb(var(--lamp) / .55); }
+  & .side-item .cat, & .view-head .cat { background: var(--well); box-shadow: inset 0 1px 4px rgb(0 0 0 / .5), inset 0 0 0 1px var(--hair); border-radius: var(--r2); color: var(--text-2); }
+  & .side-item.active .cat { color: var(--lampt); box-shadow: inset 0 1px 4px rgb(0 0 0 / .4), inset 0 0 0 1px rgb(var(--lamp) / .5), 0 0 12px -2px rgb(var(--lamp) / .55); }
+  & .view-head .cat { border-radius: var(--r3); color: var(--lampt); }
+  & .side-item .cat .ic { color: inherit; }
+  & .side-item .count { font-size: 11px; color: var(--text-3); }
+  & .side-item::before { counter-increment: ch; content: counter(ch, decimal-leading-zero); font: 600 10.5px/1 var(--mono); letter-spacing: .06em; color: var(--text-3); width: 18px; flex: none; }
+  & .side-item.active::before { color: var(--lampt); }
+  & .brand { font-weight: 650; letter-spacing: -.01em; color: var(--text); }
+  & .brand-mark { border-radius: 50%; background: rgb(var(--lamp)); box-shadow: 0 0 16px rgb(var(--lamp) / .7), inset 0 1px 0 rgb(255 255 255 / .5); width: 14px; height: 14px; }
+  & .brand-tag { color: var(--lampt); background: none; box-shadow: inset 0 0 0 1px rgb(var(--lamp) / .4); border-radius: var(--r1); padding: 3px 6px; }
+
+  /* ---------- content ---------- */
+  & .card .cover { border-radius: var(--r2); background: var(--well); box-shadow: 0 16px 30px -16px rgb(0 0 0 / .85), inset 0 0 0 1px var(--hair), 0 0 0 1px rgb(0 0 0 / .35); transition: transform var(--spring-glide-dur, .4s) var(--spring-glide, var(--ease-out)), box-shadow .3s; padding: 0; }
+  & .card:hover .cover { transform: translateY(-4px); box-shadow: 0 28px 40px -18px rgb(0 0 0 / .85), 0 0 0 1px rgb(var(--lamp) / .55), 0 0 28px -8px rgb(var(--lamp) / .45); }
+  & .card .play-fab { background: linear-gradient(180deg, rgb(var(--lamp)), color-mix(in oklab, rgb(var(--lamp)) 85%, #000)); color: rgb(var(--on-lamp)); border-radius: var(--r2); box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 3px 0 color-mix(in oklab, rgb(var(--lamp)) 55%, #000), 0 8px 16px -4px rgb(0 0 0 / .6); }
+  & .card .play-fab:active { transform: translateY(3px); box-shadow: 0 0 0 transparent; }
+  & .view-head .art { border-radius: var(--r2); box-shadow: 0 28px 50px -24px rgb(0 0 0 / .85), inset 0 0 0 1px var(--hair); }
+  & .view-head .art.round { border-radius: 50%; }
+  & .row { border-radius: var(--r2); }
+  & .row:hover { background: var(--surface); }
+  & .row.sel { background: var(--surface-2); }
+  & .row.playing { background: linear-gradient(90deg, rgb(var(--lamp) / .16), transparent 82%); box-shadow: inset 3px 0 0 rgb(var(--lamp)); }
+  & .row.playing .title { color: var(--lampt); text-shadow: 0 0 14px rgb(var(--lamp) / .4); }
+  &[data-theme="light"] .row.playing .title { text-shadow: none; }
+  & .row .thumb { border-radius: var(--r1); }
+  & .row .num { color: var(--text-3); font-size: 11.5px; letter-spacing: .04em; }
+  & .row .quality.hires { color: var(--hires, #e9c46a); }
+  & .list-head { border-bottom: 1px solid var(--hair); background: none; }
+  & .list-head button:hover, & .list-head button.sorted { color: var(--lampt); }
+  & .eq-bars i { background: rgb(var(--lamp)); border-radius: 1px; }
+  & .star.on { color: rgb(var(--lamp)); }
+  & .cat-row { border-radius: var(--r2); }
+  & .cat-row:hover { background: var(--surface); }
+
+  /* ---------- player: bezel, display well, lit Play key ---------- */
+  & #player { border-radius: var(--r4); padding: 14px 16px 16px; gap: 14px; }
+  & .np-art { border-radius: var(--r3); padding: 0; background: var(--well); overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--hair), 0 0 0 5px var(--well), 0 0 0 6px var(--hair-2), 0 26px 40px -24px rgb(0 0 0 / .9), 0 0 60px -22px rgb(var(--lamp) / .55); }
+  & .np-art img, & .np-art canvas.viz { inset: 0; width: 100%; height: 100%; border-radius: inherit; }
+  & .np-art .ph { color: var(--text-3); }
+  & .chips { gap: 6px; padding-top: 4px; }
+  & .chip { background: none; box-shadow: none; padding: 0; border-radius: 0; }
+  & .chip.title { font-family: var(--font); font-size: clamp(22px, 7cqi, 30px); font-weight: 750; letter-spacing: -.035em; line-height: 1.1; color: var(--lampt); text-shadow: 0 0 22px rgb(var(--lamp) / .38); }
+  &[data-theme="light"] .chip.title { text-shadow: none; }
+  & .chip.line2 { font-size: 14px; font-weight: 500; color: var(--text-2); letter-spacing: 0; }
+  & .chip.line2:hover { color: var(--lampt); background: none; }
+  & .np-row { gap: 10px; } & .np-row .grp { gap: 10px; }
+  & .transport { gap: 10px; margin: 6px 0 4px; align-items: flex-start; }
+  & .t-btn { border-radius: var(--r2); width: clamp(48px, 14.5cqi, 58px); height: clamp(44px, 12cqi, 52px); margin-bottom: var(--travel); }
+  & .t-btn.s { width: clamp(38px, 11cqi, 46px); height: clamp(36px, 10cqi, 44px); }
+  & .t-btn .ic { color: inherit; }
+  & .t-btn.l { width: clamp(84px, 24cqi, 100px); height: clamp(60px, 16cqi, 68px); border-radius: var(--r3); position: relative; color: rgb(var(--lamp));
+    background: linear-gradient(180deg, var(--key-a), var(--key-b));
+    box-shadow: inset 0 0 0 1px rgb(var(--lamp) / .5), var(--lit), 0 calc(var(--travel) + 1px) 0 var(--key-edge), 0 14px 22px -8px rgb(0 0 0 / .65); }
+  & .t-btn.l .ic { width: clamp(30px, 9cqi, 36px); height: clamp(30px, 9cqi, 36px); filter: drop-shadow(0 0 8px rgb(var(--lamp) / .55)); }
+  &[data-theme="light"] .t-btn.l .ic { filter: none; }
+  & .t-btn.l::after { content: none; }
+  /* Play: the key sits down and floods with the song's colour while audio plays (driven by state, so keyboard and media keys match) */
+  &.fc-on .t-btn.l { transform: translateY(var(--travel)); color: rgb(var(--on-lamp)); background: linear-gradient(180deg, color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 10%), rgb(var(--lamp)));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), inset 0 -3px 8px rgb(0 0 0 / .18), 0 1px 0 color-mix(in oklab, rgb(var(--lamp)) 50%, #000), 0 0 34px -2px rgb(var(--lamp) / .7), 0 0 80px -10px rgb(var(--lamp) / .5); }
+  &.fc-on .t-btn.l .ic { filter: none; }
+  & .t-btn.l:active { transform: translateY(calc(var(--travel) + 1px)); }
+  &.fc-on .t-btn.l:active { transform: translateY(calc(var(--travel) + 1px)); }
+  & .np-spacer { flex: 1 1 0; min-height: 4px; }
+
+  /* dot-matrix seek strip (drawn by player.js drawDots) and LCD timecode */
+  & .seek { height: 40px; }
+  & .seek .track { height: 36px; border-radius: var(--r2); background: var(--well); box-shadow: inset 0 2px 6px rgb(0 0 0 / .55), inset 0 0 0 1px var(--hair), 0 1px 0 rgb(255 255 255 / .05); }
+  & .seek .thumb { display: none; }
+  & .seek .hover-time { background: var(--plate-hi); color: var(--text); font-family: var(--mono); border-radius: var(--r1); box-shadow: inset 0 0 0 1px var(--hair-2); }
+  & .times { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+  & .times .chip:not(.ctx) { font: 600 21px/1 var(--mono); letter-spacing: .06em; padding: 7px 10px; height: auto; border-radius: var(--r1); background-color: var(--well); box-shadow: inset 0 2px 6px rgb(0 0 0 / .55), inset 0 0 0 1px var(--hair);
+    color: transparent; background-image: radial-gradient(circle at 50% 50%, rgb(var(--lamp)) 0 .95px, rgb(var(--lamp) / 0) 1.4px); background-size: 2.6px 2.6px; background-clip: text; -webkit-background-clip: text; text-shadow: none; filter: drop-shadow(0 0 4px rgb(var(--lamp) / .5)); position: relative; }
+  &[data-theme="light"] .times .chip:not(.ctx) { filter: none; }
+  & .times .ctx { justify-self: center; color: var(--text-3); gap: 6px; }
+  & .times .ctx:hover { color: var(--lampt); }
+
+  /* level knob: ticks light to the level; the cap is the machined key finish */
+  & .np-vol { gap: 8px; align-items: center; padding-top: 12px; border-top: 1px solid rgb(0 0 0 / .32); box-shadow: 0 -1px 0 rgb(255 255 255 / .06); }
+  & .np-vol.fc-vol .range { display: none; }
+  & .np-vol .fc-knob-wrap { margin-right: auto; }
+  & .fc-knob-wrap { display: flex; align-items: center; gap: 10px; }
+  & .fc-knob { position: relative; width: 52px; height: 52px; border-radius: 50%; cursor: ns-resize; touch-action: none; flex: none; }
+  & .fc-ticks { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); overflow: visible; }
+  & .k-t { stroke: var(--text-3); stroke-opacity: .5; stroke-width: 1.4; stroke-linecap: round; transition: stroke .2s, stroke-opacity .2s, filter .2s; }
+  & .k-t.big { stroke-opacity: .85; stroke-width: 1.8; }
+  & .k-t.on { stroke: rgb(var(--lamp)); stroke-opacity: 1; filter: drop-shadow(0 0 3px rgb(var(--lamp) / .8)); }
+  & .fc-knob-cap { position: absolute; inset: 11px; border-radius: 50%; background: radial-gradient(120% 120% at 35% 20%, var(--key-a), var(--key-b)); box-shadow: inset 0 0 0 1px var(--hair-2), inset 0 1px 0 rgb(255 255 255 / .16), 0 3px 0 var(--key-edge), 0 8px 12px -2px rgb(0 0 0 / .6);
+    transition: transform var(--spring-snappy-dur, .25s) var(--spring-snappy, var(--ease-out)); }
+  & .fc-knob.drag .fc-knob-cap { transition: none; }
+  & .fc-knob-dot { position: absolute; left: 50%; top: 4px; width: 3px; height: 8px; margin-left: -1.5px; border-radius: 2px; background: rgb(var(--lamp)); box-shadow: var(--glow); }
+  & .fc-read { white-space: nowrap; }
+  & .np-vol .icon-btn { width: 32px; height: 32px; }
+
+  /* ---------- menus, dialogs, toasts, drawer ---------- */
+  & .menu { padding: 6px; }
+  & .menu button { border-radius: var(--r1); color: var(--text); }
+  & .menu button:hover, & .menu button.hover, & .menu button:focus-visible { background: rgb(var(--lamp) / .14); box-shadow: inset 3px 0 0 rgb(var(--lamp)); outline: 0; }
+  & .menu button .ic { color: var(--text-2); }
+  & .menu button:hover .ic { color: var(--lampt); }
+  & .menu hr { border-top-color: var(--hair); }
+  & .dialog h2 { font-weight: 750; letter-spacing: -.035em; font-size: 24px; }
+  & .toast-act { color: var(--lampt); }
+  & .drawer-h h2 { font-weight: 750; letter-spacing: -.03em; }
+  & .qrow { border-radius: var(--r2); }
+  & .qrow:hover { background: var(--surface); }
+  & .qrow.cur { background: linear-gradient(90deg, rgb(var(--lamp) / .16), transparent 85%); box-shadow: inset 3px 0 0 rgb(var(--lamp)); }
+  & .qrow.cur .t1 { color: var(--lampt); }
+  & .qrow img { border-radius: var(--r1); }
+
+  /* ---------- range (EQ vsliders, settings sliders): well track, lamp fill, key thumb ---------- */
+  & .range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, rgb(var(--lamp)) var(--p, 0%), var(--well) var(--p, 0%)); box-shadow: inset 0 1px 3px rgb(0 0 0 / .55), inset 0 0 0 1px var(--hair); }
+  & .range::-webkit-slider-thumb { width: 14px; height: 20px; margin-top: -7px; border-radius: var(--r1); background: linear-gradient(180deg, var(--key-a), var(--key-b)); box-shadow: inset 0 0 0 1px var(--hair-2), inset 0 1px 0 rgb(255 255 255 / .15), 0 2px 0 var(--key-edge), 0 4px 8px rgb(0 0 0 / .5); }
+  & .set-group h2 { padding-top: 18px; }
+  & .set-row { border-top-color: var(--hair); }
+
+  /* ---------- Equalizer ---------- */
+  & .eq-info, & .eq-top { border-radius: var(--r2); }
+  & .knob .k-arc { stroke: rgb(var(--lamp)); }
+  & .knob .k-dot { fill: rgb(var(--lamp)); }
+  & .knob .k-body { fill: var(--key-b); stroke: var(--hair-2); }
+  & .knob .k-track { stroke: var(--well); }
+  & .knob .k-lbl { font: var(--lbl); letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+  & .knob .k-val { color: var(--lampt); }
+  & .pband { border-radius: var(--r2); background: var(--well); box-shadow: inset 0 2px 6px rgb(0 0 0 / .4), inset 0 0 0 1px var(--hair); }
+
+  /* ---------- lyrics ---------- */
+  & .ly-line { color: color-mix(in oklab, var(--text) 56%, transparent); font-family: var(--font); }
+  & .ly-line.active { color: var(--text); }
+  & .ly-line.active .w.sung { color: var(--lampt); text-shadow: 0 0 20px rgb(var(--lamp) / .45); }
+  &[data-theme="light"] .ly-line.active .w.sung { text-shadow: none; }
+
+  /* ---------- Now Playing: scope rings around the cover, L/R well, lyrics on a plate ---------- */
+  & .npv { isolation: isolate; }
+  & .npv > .npv-glow { display: none; }
+  & .npv > :not(canvas, .fc-lrwell, .npv-glow) { position: relative; z-index: 1; }
+  & .fc-rings { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+  & .npv-left { flex: 0 0 50%; padding-left: 28px; }
+  & .npv-art { width: min(100%, 250px); border-radius: var(--r3); background: var(--well); box-shadow: inset 0 0 0 1px var(--hair), 0 0 0 6px var(--well), 0 0 0 7px var(--hair-2), 0 30px 50px -26px rgb(0 0 0 / .9), 0 0 70px -20px rgb(var(--lamp) / .5); }
+  & .npv-title { font-weight: 800; letter-spacing: -.045em; color: var(--lampt); text-shadow: 0 0 26px rgb(var(--lamp) / .35); }
+  &[data-theme="light"] .npv-title { text-shadow: none; }
+  & .npv-title { margin-top: 64px; }
+  & .npv-sub { color: var(--text-2); }
+  & .npv-q { font: var(--lbl); letter-spacing: .14em; text-transform: uppercase; color: var(--lampt); background: var(--well); box-shadow: inset 0 1px 4px rgb(0 0 0 / .5), inset 0 0 0 1px var(--hair); border-radius: var(--r1); padding: 6px 10px; }
+  & .npv .lyrics-view { margin: 14px 14px 14px 0; border-radius: var(--r3); background: color-mix(in oklab, var(--plate) 70%, var(--well)); box-shadow: inset 0 0 0 1px var(--hair), var(--lit), 0 22px 40px -26px rgb(0 0 0 / .7); overflow: hidden; }
+  & .npv .ly-scroll { padding-left: 28px; }
+  & .fc-lrwell { position: absolute; left: 28px; bottom: 26px; width: 118px; height: 118px; z-index: 2; border-radius: var(--r2); background: var(--well); box-shadow: inset 0 2px 8px rgb(0 0 0 / .6), inset 0 0 0 1px var(--hair), 0 1px 0 rgb(255 255 255 / .05); pointer-events: none; }
+  & .fc-lr { position: absolute; inset: 0; width: 100%; height: 100%; }
+  & .fc-lrwell .fc-lbl { position: absolute; left: 8px; top: 8px; letter-spacing: .12em; }
+
+  /* ---------- the lamp strip: the song's three inks as a 2px lit edge on the faceplate ---------- */
+  & #player { background-image: linear-gradient(90deg, rgb(var(--ink-a)), rgb(var(--ink-b)), rgb(var(--ink-c))), radial-gradient(120% 50% at 50% 0%, rgb(var(--lamp) / .07), transparent 70%), linear-gradient(180deg, color-mix(in oklab, var(--plate) 92%, #fff), var(--plate) 40%); background-size: 100% 2px, auto, auto; background-repeat: no-repeat; }
+
+  /* ---------- mini player: faceplate + bezel art + dot-lit progress ---------- */
+  &.mini #mini { background: var(--plate); box-shadow: inset 0 0 0 1px var(--hair), var(--lit); }
+  & #mini img { border-radius: var(--r2); box-shadow: 0 0 0 4px var(--well), 0 0 0 5px var(--hair-2), 0 12px 20px -8px rgb(0 0 0 / .7); }
+  & #mini .t1 { color: var(--lampt); font-weight: 750; letter-spacing: -.02em; text-shadow: 0 0 16px rgb(var(--lamp) / .35); }
+  & #mini .mini-seek { height: 6px; border-radius: 3px; background: var(--well); box-shadow: inset 0 1px 3px rgb(0 0 0 / .6), inset 0 0 0 1px var(--hair); }
+  & #mini .mini-seek i { background: rgb(var(--lamp)); box-shadow: var(--glow); }
+}
+
+/* ---------- light: paper plates, ink text, soft key shadows ---------- */
+body.fc[data-theme="light"] {
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn:not(.l), .ov-btn) { box-shadow: inset 0 0 0 1px var(--hair), var(--lit), 0 var(--kp) 0 var(--key-edge), 0 calc(var(--kp) + 4px) 10px -4px rgb(60 40 20 / .3); color: var(--text-2); }
+  & .search, & .seek .track, & .times .chip:not(.ctx), & .chip.meta, & .npv-q, & .fc-lrwell, & .switch, & .seg, & .dialog input[type=text], & .toast, & .pband { box-shadow: inset 0 1px 4px rgb(60 40 20 / .22), inset 0 0 0 1px var(--hair); }
+  & .fc-knob-cap { background: radial-gradient(120% 120% at 35% 20%, #fff, var(--key-b)); box-shadow: inset 0 0 0 1px var(--hair-2), 0 3px 0 var(--key-edge), 0 8px 10px -3px rgb(60 40 20 / .35); }
+  & :is(#sidebar, #player, .set-group, .fx-card, .eq-wrap) { box-shadow: inset 0 0 0 1px var(--hair), var(--lit), 0 18px 34px -24px rgb(60 40 20 / .4); }
+  & .np-art, & .npv-art { box-shadow: inset 0 0 0 1px var(--hair), 0 0 0 5px var(--well), 0 0 0 6px var(--hair-2), 0 22px 36px -22px rgb(60 40 20 / .5); }
+  & .times .chip:not(.ctx) { background-image: radial-gradient(circle at 50% 50%, rgb(var(--accent)) 0 .95px, rgb(var(--accent) / 0) 1.4px); }
+  & .row.playing .title, & .qrow.cur .t1, & .chip.title, & .npv-title { color: rgb(var(--accent)); }
+  & .t-btn.l { color: rgb(var(--accent)); }
+  &.fc-on .t-btn.l { color: rgb(var(--on-lamp)); }
+}
+
+/* ---------- motion: warm-up (launch only, 1.2 s), page entrance, press ---------- */
+@keyframes fc-lamp-up { 0% { opacity: 0; } 55% { opacity: 1; } }
+@keyframes fc-strike { 0% { stroke: rgb(var(--lamp)); stroke-opacity: 1; filter: drop-shadow(0 0 4px rgb(var(--lamp))); } }
+@keyframes fc-rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes fc-lcd { 0% { opacity: .15; } 40% { opacity: 1; } 55% { opacity: .55; } 100% { opacity: 1; } }
+body.fc.fc-warm #player .fc-ticks .k-t { animation: fc-strike .5s calc(var(--i) * 14ms) ease-out both; }
+body.fc.fc-warm #player .times .chip:not(.ctx) { animation: fc-lcd 1s .1s steps(14) both; }
+body.fc.fc-warm #sidebar, body.fc.fc-warm #player { animation: fc-lamp-up 1.1s var(--ease-out) both; }
+body.fc .view .grid .card { animation: fc-rise .5s var(--ease-out) both; }
+body.fc.anim-off *, body.fc.anim-off *::before, body.fc.anim-off *::after { animation: none !important; }
+body.fc.anim-off .ink-l { -webkit-mask-image: none !important; mask-image: none !important; }
+body.fc.anim-fast .view .grid .card { animation-duration: .3s; }
+@media (prefers-reduced-motion: reduce) {
+  body.fc *, body.fc *::before, body.fc *::after { animation: none !important; transition-duration: 0s !important; }
+}
+
+/* ==========================================================================================================
+   POLISH PASS: machined keys (brushed face + specular), engraved sidebar, serif display voice, lyric plate,
+   LCD language in the library, dark-LCD in light, mini LCD, press shock. Still four materials.
+   ========================================================================================================== */
+body.fc {
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --sheen: linear-gradient(180deg, rgb(255 255 255 / .13) 0, rgb(255 255 255 / .03) 44%, rgb(0 0 0 / .16) 100%);
+  --brush: repeating-linear-gradient(90deg, rgb(255 255 255 / .026) 0 1px, transparent 1px 3px);
+  --lcd-well: var(--well);
+}
+body.fc[data-theme="light"] {
+  --sheen: linear-gradient(180deg, rgb(255 255 255 / .85) 0, rgb(255 255 255 / .2) 46%, rgb(90 60 30 / .09) 100%);
+  --brush: repeating-linear-gradient(90deg, rgb(60 40 20 / .022) 0 1px, transparent 1px 3px);
+  /* light theme: LCD and seek strip are dark glass with lit dots, the way a real display sits in a pale chassis */
+  --lcd-well: color-mix(in oklab, rgb(var(--deep)) 14%, #14100c);
+}
+body.fc[data-theme] {
+  /* ---- type: serif italic display voice over Geist / Geist Mono ---- */
+  & .view-title h1, & .npv-title, & .chip.title, & .dialog h2, & .drawer-h h2, & .empty h2 { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -.01em; }
+  & .view-title h1 { font-size: clamp(54px, 6.2vw, 92px); line-height: .92; letter-spacing: -.02em; }
+  & .chip.title { font-size: clamp(28px, 9cqi, 38px); line-height: 1.02; }
+  & .npv-title { font-size: clamp(34px, 3.4vw, 48px); line-height: 1.02; }
+  & .dialog h2 { font-size: 30px; } & .drawer-h h2 { font-size: 26px; }
+  & .section-h h2 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 28px; letter-spacing: 0; }
+  & .card .t2, & .row .artist, & .row .album { font-family: var(--mono); font-size: 11.5px; letter-spacing: .015em; }
+
+  /* ---- keys: brushed metal face, specular top edge, hard under-edge ---- */
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn:not(.l), .ov-btn) { background: var(--sheen), var(--brush), linear-gradient(180deg, var(--key-a), var(--key-b));
+    box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 0 rgb(255 255 255 / .22), inset 0 -1px 0 rgb(0 0 0 / .25), 0 var(--kp) 0 var(--key-edge), 0 calc(var(--kp) + 1px) 0 rgb(0 0 0 / .35), 0 calc(var(--kp) + 7px) 14px -4px rgb(0 0 0 / .6); }
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn:not(.l), .ov-btn):hover { background: var(--sheen), var(--brush), linear-gradient(180deg, color-mix(in oklab, var(--key-a) 86%, #fff), color-mix(in oklab, var(--key-b) 92%, #fff)); }
+  & :is(.icon-btn, .pill-btn, .tb-btn, .tb-select, .dropdown, .cta, .toggle-btn, .preset-btn, .t-btn, .ov-btn):active { box-shadow: inset 0 0 0 1px var(--hair), inset 0 2px 4px rgb(0 0 0 / .45), 0 0 0 var(--key-edge), 0 2px 5px -2px rgb(0 0 0 / .5); }
+  & :is(.tb-btn.primary, .cta.primary, .cta.accent, .tb-btn.accent) { background: var(--sheen), var(--brush), linear-gradient(180deg, color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 14%), rgb(var(--lamp))); }
+  & .t-btn.l { background: var(--sheen), var(--brush), linear-gradient(180deg, var(--key-a), var(--key-b)); }
+  &.fc-on .t-btn.l { background: var(--sheen), var(--brush), linear-gradient(180deg, color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 12%), rgb(var(--lamp))); }
+  & .fc-knob-cap { background: radial-gradient(60% 60% at 32% 22%, rgb(255 255 255 / .22), transparent 70%), repeating-conic-gradient(from 20deg, var(--key-a) 0 14deg, var(--key-b) 14deg 28deg);
+    box-shadow: inset 0 0 0 1px var(--hair-2), inset 0 1px 0 rgb(255 255 255 / .28), inset 0 -2px 4px rgb(0 0 0 / .3), 0 3px 0 var(--key-edge), 0 9px 14px -2px rgb(0 0 0 / .65); }
+  & .range::-webkit-slider-thumb { background: var(--sheen), var(--brush), linear-gradient(180deg, var(--key-a), var(--key-b)); }
+  & .switch::after { background: var(--sheen), linear-gradient(180deg, var(--key-a), var(--key-b)); }
+  & .switch.on::after { background: var(--sheen), linear-gradient(180deg, rgb(var(--lamp)), color-mix(in oklab, rgb(var(--lamp)) 85%, #000)); }
+
+  /* ---- sidebar: engraved bare icons, the active channel is the one lit key ---- */
+  & #sidebar .side-item .cat { background: none; box-shadow: none; color: var(--text-3); filter: drop-shadow(0 1px 0 rgb(255 255 255 / .07)); transition: transform var(--spring-snappy-dur, .26s) var(--spring-snappy, var(--ease-out)), background-color .25s, color .25s; }
+  & #sidebar .side-item:hover .cat { color: var(--text); }
+  & #sidebar .side-item.active .cat { color: rgb(var(--on-lamp)); filter: none; background: var(--sheen), linear-gradient(180deg, color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 12%), rgb(var(--lamp)));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 2px 0 color-mix(in oklab, rgb(var(--lamp)) 55%, #000), 0 0 18px -2px rgb(var(--lamp) / .6); transform: translateY(-1px); }
+  &[data-theme="light"] #sidebar .side-item .cat { filter: drop-shadow(0 1px 0 rgb(255 255 255 / .8)); }
+  & .view-head .cat { background: var(--sheen), linear-gradient(180deg, color-mix(in oklab, rgb(var(--lamp)) 100%, #fff 12%), rgb(var(--lamp))); color: rgb(var(--on-lamp)); box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 4px 0 color-mix(in oklab, rgb(var(--lamp)) 55%, #000), 0 0 32px -4px rgb(var(--lamp) / .6); }
+
+  /* ---- library: the LCD + lamp language reaches the pages ---- */
+  & .view-title .sub { display: inline-block; margin-top: 12px; padding: 6px 10px; border-radius: var(--r1); background-color: var(--lcd-well); font: 600 12px/1 var(--mono); letter-spacing: .1em; color: transparent;
+    background-image: radial-gradient(circle at 50% 50%, rgb(var(--lcd)) 0 .8px, rgb(var(--lcd) / 0) 1.25px); background-size: 2.3px 2.3px; background-clip: text; -webkit-background-clip: text;
+    box-shadow: inset 0 2px 6px rgb(0 0 0 / .55), inset 0 0 0 1px var(--hair); filter: drop-shadow(0 0 3px rgb(var(--lcd) / .45)); }
+  & .card .cover { box-shadow: 0 16px 30px -16px rgb(0 0 0 / .85), inset 0 0 0 1px var(--hair), 0 0 0 3px var(--well), 0 0 0 4px var(--hair-2); }
+  & .card:hover .cover { box-shadow: 0 28px 40px -18px rgb(0 0 0 / .85), 0 0 0 3px var(--well), 0 0 0 4px rgb(var(--lamp) / .7), 0 0 34px -4px rgb(var(--lamp) / .5); }
+  & .card .cover::after { content: ""; position: absolute; inset: auto 0 0 0; height: 3px; background: linear-gradient(90deg, rgb(var(--ink-a)), rgb(var(--ink-b)), rgb(var(--ink-c))); opacity: 0; transition: opacity .3s; border-radius: 0 0 var(--r2) var(--r2); }
+  & .card:hover .cover::after { opacity: 1; }
+
+  /* ---- lyrics: a plate with a lit header strip, no dead slab ---- */
+  & .npv .lyrics-view { position: relative; background: radial-gradient(90% 38% at 0% 100%, rgb(var(--lamp) / .16), transparent 70%), radial-gradient(70% 30% at 100% 0%, rgb(var(--ink-b) / .12), transparent 70%), color-mix(in oklab, var(--plate) 70%, var(--well)); }
+  & .npv .lyrics-view::before { content: "LYRICS"; position: absolute; left: 0; right: 0; top: 0; z-index: 2; padding: 15px 28px 13px; font: var(--lbl); letter-spacing: .18em; color: var(--text-3);
+    background: linear-gradient(180deg, color-mix(in oklab, var(--plate) 70%, var(--well)) 60%, transparent); box-shadow: inset 3px 0 0 rgb(var(--lamp)); pointer-events: none; text-shadow: 0 1px 0 rgb(255 255 255 / .06); }
+  & .npv .lyrics-view::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 3; background: linear-gradient(90deg, rgb(var(--ink-a)), rgb(var(--ink-b)), rgb(var(--ink-c))); pointer-events: none; }
+  & .npv .ly-scroll { padding-top: 15vh; padding-bottom: 32vh; mask-image: linear-gradient(transparent 0, #000 9%, #000 84%, transparent 100%); }
+  & .ly-line.active { text-shadow: 0 0 24px rgb(var(--lamp) / .35); }
+  & .ly-line.past { color: color-mix(in oklab, var(--text) 40%, transparent); }
+
+  /* ---- light: dark-glass LCD with lit dots (AA), seek strip likewise ---- */
+  &[data-theme="light"] .seek .track, &[data-theme="light"] .fc-lrwell { background: var(--lcd-well); box-shadow: inset 0 2px 6px rgb(0 0 0 / .5), inset 0 0 0 1px rgb(0 0 0 / .25); }
+  &[data-theme="light"] .view-title .sub { box-shadow: inset 0 2px 6px rgb(0 0 0 / .5), inset 0 0 0 1px rgb(0 0 0 / .25); }
+  &[data-theme="light"] .fc-lrwell .fc-lbl { color: rgb(255 255 255 / .6); }
+  &[data-theme="light"] .npv .lyrics-view::before { text-shadow: 0 1px 0 rgb(255 255 255 / .8); }
+  &[data-theme="light"] .ly-line.active { text-shadow: none; }
+
+  /* ---- mini: lit strip, LCD time, bezel art ---- */
+  &.mini #mini { background: radial-gradient(80% 120% at 0% 100%, rgb(var(--lamp) / .18), transparent 70%), linear-gradient(180deg, var(--plate-hi), var(--plate)); box-shadow: inset 0 0 0 1px var(--hair-2), var(--lit), inset 0 2px 0 rgb(var(--lamp)); }
+  & #mini .fc-mt { display: inline-block; margin-top: 8px; padding: 5px 8px; border-radius: var(--r1); background-color: var(--lcd-well); font: 600 15px/1 var(--mono); letter-spacing: .06em; color: transparent; background-image: radial-gradient(circle at 50% 50%, rgb(var(--lcd)) 0 .8px, rgb(var(--lcd) / 0) 1.25px); background-size: 2.2px 2.2px; background-clip: text; -webkit-background-clip: text; box-shadow: inset 0 2px 5px rgb(0 0 0 / .55), inset 0 0 0 1px var(--hair); filter: drop-shadow(0 0 3px rgb(var(--lcd) / .45)); }
+  & #mini .mini-seek { margin-top: 8px; height: 7px; }
+  & #mini .t1 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 22px; letter-spacing: 0; }
+}
+/* press shock: one ring leaves the Play key when it changes state (compositor-only: transform + opacity) */
+@keyframes fc-shock { from { transform: scale(1); opacity: .85; } to { transform: scale(1.7, 1.9); opacity: 0; } }
+body.fc .t-btn.l { position: relative; }
+body.fc .t-btn.l::before { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid rgb(var(--lamp)); opacity: 0; pointer-events: none; display: block !important; }
+body.fc.fc-hit .t-btn.l::before { animation: fc-shock .8s var(--ease-out) both; }
+body.fc[data-theme="light"] .t-btn.l::before { border-color: rgb(var(--accent)); }
+body.fc[data-theme] .chip.scrolling { padding-left: 12px; margin-left: -12px; } /* the marquee fade gutter lives outside the text */
+/* LCD glass: two background layers, lit dots clipped to the glyphs and the dark glass behind them */
+body.fc[data-theme][data-theme] :is(.times .chip:not(.ctx), .view-title .sub, #mini .fc-mt) { background-color: transparent;
+  background-image: radial-gradient(circle at 50% 50%, rgb(var(--lcd)) 0 .9px, rgb(var(--lcd) / 0) 1.35px), linear-gradient(var(--lcd-well), var(--lcd-well));
+  background-size: 2.6px 2.6px, auto; background-clip: text, padding-box; -webkit-background-clip: text, padding-box; }
+body.fc[data-theme][data-theme] :is(.view-title .sub, #mini .fc-mt) { background-size: 2.3px 2.3px, auto; }

@@ -97,7 +97,7 @@ function flush() {
   if (pending.size) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, 2000); }
 }
 const STORES = new Set(['settings', 'playlists', 'stats', 'state', 'streams', 'bookmarks']);
-ipcMain.handle('store:get', (e, name) => STORES.has(name) ? readJSON(name + '.json', null) : null);
+ipcMain.handle('store:get', (e, name) => !STORES.has(name) ? null : pending.has(name + '.json') ? pending.get(name + '.json') : readJSON(name + '.json', null)); // a write still waiting for its flush is the newest copy (a reload right after a change)
 on('store:set', (e, name, data) => { if (STORES.has(name) && SHAPE[name](data)) writeJSON(name + '.json', data); });
 
 // ---------- window ----------

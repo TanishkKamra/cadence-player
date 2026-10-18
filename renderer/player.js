@@ -123,13 +123,16 @@ export function drawSeek(frac) {
   P.lastFrac = frac;
   const grow = P.wave ? Math.min(1, (performance.now() - (P.waveAt || 0)) / 520) : 0, k = 1 - (1 - grow) ** 3;
   seekAria(frac);
-  const key = `${Math.floor(frac * W / (3 * dpr))}|${W}|${H}|${P.wave ? 1 : 0}|${k.toFixed(3)}|${document.documentElement.style.getPropertyValue('--accent')}|${document.body.dataset.theme}`;
+  const key = `${Math.floor(frac * W / (3 * dpr))}|${W}|${H}|${P.wave ? 1 : 0}|${k.toFixed(3)}|${document.documentElement.style.getPropertyValue('--accent')}|${document.documentElement.style.getPropertyValue('--seek-rest')}|${document.body.dataset.theme}`;
   if (key === P.seekKey) return;
   P.seekKey = key;
   if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
   const g = c.getContext('2d');
   g.clearRect(0, 0, W, H);
-  const peaks = P.wave, accent = accentRGB(), x = frac * W, rest = document.body.dataset.theme === 'light' ? 'rgba(0,0,0,0.26)' : 'rgba(255,255,255,0.22)';
+  // a design may recolour the waveform (--seek-played / --seek-rest, "r g b") or paint it itself (P.seekPainter)
+  const rs = getComputedStyle(document.documentElement), pl = rs.getPropertyValue('--seek-played').trim(), rt = rs.getPropertyValue('--seek-rest').trim();
+  const peaks = P.wave, accent = pl ? pl.split(/\s+/).join(',') : accentRGB(), x = frac * W, rest = rt ? `rgb(${rt.split(/\s+/).join(',')})` : document.body.dataset.theme === 'light' ? 'rgba(0,0,0,0.26)' : 'rgba(255,255,255,0.22)';
+  if (P.seekPainter) { P.seekPainter(g, W, H, dpr, peaks, x, k); P.seek.thumb.style.left = frac * 100 + '%'; return; }
   // bars rise out of a dotted baseline when the peaks arrive, so a track change never blinks the waveform away
   const n = Math.floor(W / (3 * dpr)), bw = 2 * dpr;
   for (let i = 0; i < n; i++) {
@@ -208,6 +211,7 @@ export function applyAccent(img) {
   if (img && set.accentFromArt) try { rgb = accentFrom(img); } catch {}
   if (!rgb) { const hex = String(set.accent).replace('#', ''); rgb = /^[0-9a-f]{6}$/i.test(hex) ? [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)) : [124, 140, 255]; }
   document.documentElement.style.setProperty('--accent', rgb.join(' '));
+  window.dispatchEvent(new CustomEvent('cadence:art', { detail: { img, rgb } })); // designs repaint from the new cover
 }
 
 const marquee = (chip, text) => {
@@ -230,9 +234,11 @@ export function updatePlayer() {
   P.shown = t; P.shownArt = t?.art;
   if (changed) setArt(t);
   // track change: title, artist and format rise out of a mask one after another, behind the cover
-  if (changed && t && set.artAnim) [P.title, P.line2, P.meta].forEach((c, i) => fade(c, [
+  const press = document.body.classList.contains('press'); // Cinema Press raises the title letter by letter itself
+  if (changed && t && set.artAnim) [...(press ? [] : [P.title]), P.line2, P.meta].forEach((c, i) => fade(c, [
     { opacity: 0, transform: 'translateY(60%)', clipPath: 'inset(0 0 60% 0)' }, { opacity: 1, transform: 'none', clipPath: 'inset(0 0 0 0)' }], 620, { delay: 90 + i * 60, fill: 'backwards' }));
   marquee(P.title, t ? (P.streamTitle && t.stream ? P.streamTitle : titleOf(t)) : 'Nothing playing');
+  if (press && changed && t && set.artAnim) window.dispatchEvent(new CustomEvent('press:title', { detail: { el: P.title.querySelector('.mq') } }));
   marquee(P.line2, t ? [artistOf(t), t.stream ? t.title : t.album].filter(Boolean).join(' — ') : 'Pick something from your library');
   P.meta.textContent = t ? (t.stream ? 'Live stream' : `${fmtQuality(t)} · ${fmtTime(t.duration)}`) : '';
   P.meta.classList.toggle('hires', !!t && isHiRes(t));

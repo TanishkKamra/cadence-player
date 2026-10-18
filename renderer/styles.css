@@ -1296,3 +1296,7 @@ body[data-theme="light"] .az.scrub { background: rgb(255 255 255 / .7); }
 /* Mica / Acrylic: the page turns see-through so the Windows backdrop shows; the album glow stays as a tint on top */
 html:has(> body.mat-mica), html:has(> body.mat-acrylic), body.mat-mica, body.mat-acrylic { background: transparent; }
 body.mat-mica #bg, body.mat-acrylic #bg { opacity: .55; }
+
+/* ================================================================ v1.0 Designs */
+/* switching design reloads the window: fade the old look out first */
+body.design-out #app { opacity: 0; transition: opacity .18s ease-in; }

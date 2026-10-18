@@ -5,7 +5,8 @@ import { toggle, rangeInput, toast, confirm, dropdown } from './ui.js';
 import { render, crossfade } from './views.js';
 import { clearLyricsCache } from './lyricsview.js';
 import { applyDevicePreset } from './eq.js';
-import { applyTheme, applyAccentFromArt, importPhone, exportBackup, importBackup, reindex, fetchArtistImages, syncEngine, syncMediaKeys } from './app.js';
+import { DESIGNS } from './designs/index.js';
+import { applyTheme, applyAccentFromArt, switchDesign, importPhone, exportBackup, importBackup, reindex, fetchArtistImages, syncEngine, syncMediaKeys } from './app.js';
 import { downloadArt } from './actions.js';
 
 let query = '';
@@ -114,6 +115,8 @@ export function settingsView() {
       row('Lyrics time offset', 'Positive values make lyrics appear later.', slider('lyricsOffset', -5, 5, 0.1, v => signed(v, 1, ' s'))),
       row('Lyrics search URL', 'Used by “Search the web”. %ARTIST% and %TITLE% are replaced.', (() => { const i = h('input', { type: 'text', class: 'set-text', value: set.lyricsSearchUrl }); i.addEventListener('change', () => { if (/^https:\/\//.test(i.value)) { set.lyricsSearchUrl = i.value; saveSettings(); } else toast('Use an https:// address', true); }); return i; })())),
     group('Look and feel',
+      row('Design', 'The whole look of Cadence. Switching reloads the window; the song keeps playing from where it was.', sel('design', Object.entries(DESIGNS).map(([k, d]) => [k, d.label]), switchDesign)),
+      set.design === 'lit-chassis' ? row('Live visuals', 'Phosphor rings and the dot-matrix seek strip animate while audio plays (capped at 60 fps). Off keeps them still.', sw('liveVisuals', () => document.dispatchEvent(new Event('fc:live')))) : null,
       row('Theme', null, sel('theme', [['dark', 'Dark'], ['black', 'Black (OLED)'], ['light', 'Light'], ['auto', 'Follow Windows']], () => crossfade(applyTheme))),
       row('Animations', null, sel('animations', [['normal', 'Normal'], ['fast', 'Fast'], ['off', 'Off']], applyTheme)),
       row('Window material', 'Windows 11 backdrop behind the glass: Mica tints with your wallpaper, Acrylic lets the desktop show through.', sel('windowMaterial', [['none', 'None'], ['mica', 'Mica'], ['acrylic', 'Acrylic']], () => crossfade(applyTheme))),

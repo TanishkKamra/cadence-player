@@ -1,4 +1,5 @@
 // Shared state, settings, persistence, library index and the play queue.
+import { DESIGNS } from './designs/index.js';
 import { debounce, shuffleArr, splitNames, norm } from './util.js';
 
 export const DEFAULTS = {
@@ -23,7 +24,7 @@ export const DEFAULTS = {
   // lyrics
   onlineLyrics: false, lyricsSize: 34, lyricsOffset: 0, lyricsSearchUrl: 'https://www.google.com/search?q=lyrics+%ARTIST%+%TITLE%',
   // look and feel
-  theme: 'dark', blur: true, blurAmount: 70, bgIntensity: 1, bgSaturation: 1.5, bgGradient: 4, accentFromArt: true, accent: '#ff8a3d', animations: 'normal', windowMaterial: 'none',
+  theme: 'dark', blur: true, blurAmount: 70, bgIntensity: 1, bgSaturation: 1.5, bgGradient: 4, accentFromArt: true, accent: '#ff8a3d', animations: 'normal', windowMaterial: 'none', design: 'classic', liveVisuals: true,
   // visualizer
   vizDuration: 120, vizMode: 'milk', vizLiked: [], vizHidden: [], vizFadedOpacity: 0.5, vizKeepAwake: true, vizSpectrumStyle: 'rounded',
   // headset / desktop
@@ -46,7 +47,7 @@ const RANGE = {
   vizDuration: [5, 600], vizFadedOpacity: [0, 1], bassFreq: [20, 2000], trebleFreq: [1000, 20000], graphicBands: [3, 31], sampleRate: [0, 384000],
 };
 const ENUM = {
-  theme: ['dark', 'black', 'light', 'auto'], animations: ['normal', 'fast', 'off'], windowMaterial: ['none', 'mica', 'acrylic'], eqMode: ['graphic', 'parametric'], xfMode: ['none', 'nongapless', 'all', 'shuffled'],
+  theme: ['dark', 'black', 'light', 'auto'], animations: ['normal', 'fast', 'off'], windowMaterial: ['none', 'mica', 'acrylic'], design: Object.keys(DESIGNS), eqMode: ['graphic', 'parametric'], xfMode: ['none', 'nongapless', 'all', 'shuffled'],
   manualFade: ['none', 'short', 'full'], rgMode: ['off', 'track', 'album'], rating: ['thumbs', 'stars'], queueStart: ['after', 'now'], queueEnd: ['return', 'stay'],
   plInsert: ['end', 'start', 'shuffled'], showTrackNo: ['off', 'track'], shuffleMode: ['songsCats', 'cats', 'songs'], shuffleRandom: ['full', 'less'],
   proButtons: ['category', 'seek'], vizMode: ['milk', 'bars'], vizSpectrumStyle: ['rounded', 'classic', 'off'], listAction: ['play', 'enqueue'],
