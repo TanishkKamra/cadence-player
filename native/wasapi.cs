@@ -53,6 +53,7 @@ static class Wasapi {
   [MTAThread]
   static void Main(string[] args) {
     if (args.Length > 0 && args[0] == "--selftest") { Environment.Exit(SelfTest()); }
+    if (args.Length == 6 && args[0] == "--process") { Environment.Exit(Offline(args)); }
     deviceName = args.Length > 0 ? args[0] : "";
     stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
     new Thread(Render) { IsBackground = true, Priority = ThreadPriority.Highest }.Start();
@@ -546,6 +547,26 @@ static class Wasapi {
     return fails;
   }
   static bool RevReady(Dsp d) { return d.ReverbReady; }
+  // --process <rate> <script> <in.f64> <out.f64> <chunk>: runs the DSP over interleaved stereo doubles, for the parity test with
+  // renderer/dsp.js. Script lines: "<frame> cfg <DspConfig text>" or "<frame> vol <gain>", applied before that frame's chunk.
+  // Reverb is built synchronously here, so it is ready from the first sample.
+  static int Offline(string[] a) {
+    int rate = int.Parse(a[1]), chunk = int.Parse(a[5]); var d = new Dsp(rate);
+    var steps = File.ReadAllLines(a[2]).Where(l => l.Trim().Length > 0).Select(l => l.Split(new[] { ' ' }, 3)).ToList();
+    var b = File.ReadAllBytes(a[3]); var x = new double[b.Length / 8]; Buffer.BlockCopy(b, 0, x, 0, b.Length);
+    int frames = x.Length / 2, si = 0; var seg = new double[2 * chunk];
+    for (int at = 0; at < frames; at += chunk) {
+      while (si < steps.Count && long.Parse(steps[si][0]) <= at) {
+        var st = steps[si++];
+        if (st[1] == "cfg") { d.Apply(DspConfig.Parse(st[2])); while (!d.ReverbReady && d.Cfg.RevOn) { d.Process(new double[0], 0); Thread.Sleep(5); } }
+        else d.Volume = double.Parse(st[2], CultureInfo.InvariantCulture);
+      }
+      int n = Math.Min(chunk, frames - at); Array.Copy(x, 2 * at, seg, 0, 2 * n); d.Process(seg, n); Array.Copy(seg, 0, x, 2 * at, 2 * n);
+    }
+    Buffer.BlockCopy(x, 0, b, 0, b.Length); File.WriteAllBytes(a[4], b);
+    Console.WriteLine(d.Latency + " " + d.Lim.Limited + " " + d.Lim.Clamps);
+    return 0;
+  }
   // amplitude of tone f in the left channel over frames [a, b)
   static double Amp(double[] x, double f, int fs, int a, int b) { double s = 0, c = 0; for (int i = a; i < b; i++) { double w = 2 * Math.PI * f * i / fs; s += x[2 * i] * Math.Sin(w); c += x[2 * i] * Math.Cos(w); } return 2 * Math.Sqrt(s * s + c * c) / (b - a); }
   // true peak in dBTP: the ITU-R BS.1770-4 Annex 2 4x meter, and a reference (Kaiser sinc, beta 12, +-64 taps, 64 points per sample) near its loudest spots

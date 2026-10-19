@@ -295,11 +295,11 @@ sealed class Dsp {
 //           Nothing that is not boosted is touched, so a bass boost never ducks vocals or cymbals.
 //  stage B: broadband, on the actual output: catches what stage A cannot (an unboosted signal that is itself over).
 // Both stages: min-hold over the look-ahead then a moving average of the same length, so the gain at every peak is at or
-// below what that peak needs (no exponential attack that relies on a clipper). Inter-sample peaks: an 8x grid of
+// below what that peak needs (no exponential attack that relies on a clipper). Inter-sample peaks: a 4x grid of
 // Kaiser-windowed sinc (128 taps) refined by a parabola, plus the 4 ITU-R BS.1770-4 phases, whichever reads higher.
 // All gains at exactly 1 (and no boost parts in flight): the output is the delayed input, bit for bit.
 sealed class Limiter {
-  public const int H = 64, G = 8, PH = G - 1 + 4; // interpolator half length (taps each side); G-1 positions between samples + 4 ITU phases
+  public const int H = 64, G = 4, PH = G - 1 + 4; // interpolator half length (taps each side); G-1 positions between samples + 4 ITU phases
   public readonly int L, WA, WB; readonly int M, slots;
   public double Ceil = Math.Pow(10, -1.0 / 20);
   readonly double[] s0R, SR, yR;
@@ -335,29 +335,31 @@ sealed class Limiter {
   static readonly double[] ITU0 = { 0.0017089843750, 0.0109863281250, -0.0196533203125, 0.0332031250000, -0.0594482421875, 0.1373291015625, 0.9721679687500, -0.1022949218750, 0.0476074218750, -0.0266113281250, 0.0148925781250, -0.0083007812500 };
   static readonly double[] ITU1 = { -0.0291748046875, 0.0292968750000, -0.0517578125000, 0.0891113281250, -0.1665039062500, 0.4650878906250, 0.7797851562500, -0.2003173828125, 0.1015625000000, -0.0582275390625, 0.0330810546875, -0.0189208984375 };
   // kernels: value near the interval (m, m+1) = sum w[j] x[m + KOFF[p] + j]
-  static readonly int[] KOFF = new int[PH];
-  static readonly double[][] KER = Kernel(); // after KOFF and the ITU tables: static fields initialize in text order
+  // KER finds the peak; KERS (32 taps) splits it into the boost parts' shares, which only set proportions: stage B holds the ceiling
+  const int HS = 16;
+  static readonly int[] KOFF = new int[PH], KOFFS = new int[PH];
+  static readonly double[][] KER = Kernel(H, 9, KOFF), KERS = Kernel(HS, 8, KOFFS); // after KOFF and the ITU tables: static fields initialize in text order
   // no kernel output can exceed KS times the largest sample in its window (+ the estimate bias)
   static readonly double KS = KER.Max(w => w.Sum(v => Math.Abs(v))) * 1.0035;
-  static double[][] Kernel() {
-    const double beta = 9; var ker = new double[PH][];
+  static double[][] Kernel(int h, double beta, int[] koff) {
+    var ker = new double[PH][];
     for (int p = 0; p < G - 1; p++) {
-      double tau = (p + 1) / (double)G, sum = 0; var w = new double[2 * H];
-      for (int j = 0; j < 2 * H; j++) {
-        double u = tau + H - 1 - j, r = u / H, sinc = Math.Sin(Math.PI * u) / (Math.PI * u);
+      double tau = (p + 1) / (double)G, sum = 0; var w = new double[2 * h];
+      for (int j = 0; j < 2 * h; j++) {
+        double u = tau + h - 1 - j, r = u / h, sinc = Math.Sin(Math.PI * u) / (Math.PI * u);
         w[j] = sinc * I0(beta * Math.Sqrt(Math.Max(0, 1 - r * r))) / I0(beta); sum += w[j];
       }
-      for (int j = 0; j < 2 * H; j++) w[j] /= sum; // exact at DC
-      ker[p] = w; KOFF[p] = 1 - H;
+      for (int j = 0; j < 2 * h; j++) w[j] /= sum; // exact at DC
+      ker[p] = w; koff[p] = 1 - h;
     }
     // ITU y[4n+p] = sum h_p[k] x[n-k], taken at n = m + 6 so its window (m-5 .. m+6) lies inside the available samples
     var itu = new[] { ITU0, ITU1, ITU1.Reverse().ToArray(), ITU0.Reverse().ToArray() };
-    for (int p = 0; p < 4; p++) { ker[G - 1 + p] = itu[p].Reverse().ToArray(); KOFF[G - 1 + p] = -5; }
+    for (int p = 0; p < 4; p++) { ker[G - 1 + p] = itu[p].Reverse().ToArray(); koff[G - 1 + p] = -5; }
     return ker;
   }
   // value number p near the interval (m, m+1) of ring r, channel ch
-  double Interp(double[] r, long m, int p, int ch) {
-    double[] w = KER[p]; double s = 0; long b = m + KOFF[p];
+  double Interp(double[] r, long m, int p, int ch, bool share = false) {
+    double[] w = share ? KERS[p] : KER[p]; double s = 0; long b = m + (share ? KOFFS[p] : KOFF[p]);
     for (int j = 0; j < w.Length; j++) s += w[j] * r[2 * (int)((b + j) & M) + ch];
     return s;
   }
@@ -423,7 +425,7 @@ sealed class Limiter {
             int pi; double sp = Peak(SR, m, ch, out pi);
             if (Math.Abs(sp) > Ceil) {
               // shares of the boost parts at the point where the over peaks
-              for (int q = 0; q < nal; q++) { var r = dR[al[q]]; dv[al[q]] = pi >= 0 ? Interp(r, m, pi, ch) : r[2 * (int)((m + (pi == -2 ? 1 : 0)) & M) + ch]; }
+              for (int q = 0; q < nal; q++) { var r = dR[al[q]]; dv[al[q]] = pi >= 0 ? Interp(r, m, pi, ch, true) : r[2 * (int)((m + (pi == -2 ? 1 : 0)) & M) + ch]; }
               Alloc(sp, nal, ivC);
             }
           }
@@ -510,12 +512,12 @@ sealed class Reverb {
     fft = new Fft(N);
     // the IR (Engine.makeIR): decaying noise, high frequencies die faster
     int len = (int)Math.Floor(rate * (0.25 + size * 5.5));
-    double decay = 6.5 - fade * 5; var rnd = new Random(1234);
+    double decay = 6.5 - fade * 5; uint seed = 1234; // mulberry32, the same noise as renderer/dsp.js
     var ir = new double[2][]; double pow = 0;
     for (int ch = 0; ch < 2; ch++) {
       ir[ch] = new double[len]; double lpv = 0;
       for (int i = 0; i < len; i++) {
-        double x = (double)i / len, nz = (rnd.NextDouble() * 2 - 1) * Math.Pow(1 - x, decay), k = 1 - Math.Min(0.97, damp * x * 1.2);
+        double x = (double)i / len, nz = (Noise(ref seed) * 2 - 1) * Math.Pow(1 - x, decay), k = 1 - Math.Min(0.97, damp * x * 1.2);
         lpv += (nz - lpv) * k; ir[ch][i] = lpv; pow += lpv * lpv;
       }
     }
@@ -538,6 +540,11 @@ sealed class Reverb {
     pd = new double[2 * ((int)(rate * 0.3) + 1)];
     tap = new double[2 * B]; dryD = new double[2 * B];
     Params(c);
+  }
+  static double Noise(ref uint a) {
+    a += 0x6D2B79F5; uint t = (a ^ (a >> 15)) * (1 | a);
+    t = (t + (t ^ (t >> 7)) * (61 | t)) ^ t;
+    return (t ^ (t >> 14)) / 4294967296.0;
   }
   public void Params(DspConfig c) {
     pdLen = Math.Min(pd.Length / 2 - 1, (int)Math.Round(c.PreDelay * 0.3 * rate));

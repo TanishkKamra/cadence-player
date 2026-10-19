@@ -382,7 +382,7 @@ export function audioInfo() {
     ['Tone', o.toneOn ? `bass ${fmtDb(o.bass)} @ ${o.bassFreq} Hz · treble ${fmtDb(o.treble)} @ ${o.trebleFreq} Hz` : 'Off'],
     ['Stereo', `${o.mono ? 'Mono' : 'Stereo'} · balance ${o.balance || 0} · expand ${Math.round(((o.width || 1) - 1) / 1.5 * 100)}%`],
     ['Reverb', o.reverb?.on ? `${set.reverb.preset} · mix ${set.reverb.mix.toFixed(2)}` : 'Off'],
-    ['Limiter', o.limiter ? 'On (−1 dBFS, 20:1)' : 'Off'],
+    ['Limiter', o.limiter ? `On (${o.ceiling ?? -1} dBTP true peak)` : 'Off'],
     ['Crossfade', set.xfMode === 'none' ? 'Off (gapless)' : `${set.xfMode} · ${set.crossfadeLen} s`],
     ['Output', `Web Audio · ${c.sampleRate / 1000} kHz · 32-bit float · ${set.device ? 'selected device' : 'system default device'}`],
     ['Latency', `${Math.round(((c.baseLatency || 0) + (c.outputLatency || 0)) * 1000)} ms output`],
