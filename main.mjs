@@ -955,8 +955,10 @@ ipcMain.handle('autoeq:index', async () => {
   fsp.writeFile(key, JSON.stringify({ at: Date.now(), list })).catch(() => {});
   return list;
 });
+// a results/ path from the index: no '..' segment once decoded, with / or \ (URLs treat both as separators)
+const aeqPathOk = p => { try { return !decodeURIComponent(p).split(/[\\/]/).includes('..'); } catch { return false; } };
 ipcMain.handle('autoeq:get', async (e, item) => {
-  if (!isObj(item) || !str(item.path) || !str(item.name) || decodeURIComponent(item.path).split(/[\/]/).includes('..')) throw new Error('Profile not found');
+  if (!isObj(item) || !str(item.path) || !str(item.name) || !aeqPathOk(item.path)) throw new Error('Profile not found');
   const r = await net.fetch(AUTOEQ + item.path + '/' + encodeURIComponent(item.name + ' ParametricEQ.txt'));
   if (!r.ok) throw new Error('Profile not found');
   const text = await r.text();
