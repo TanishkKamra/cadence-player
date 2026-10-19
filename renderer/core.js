@@ -6,7 +6,7 @@ export const DEFAULTS = {
   volume: 0.8, lastVol: 0.8,
   // equalizer / DSP
   eqOn: true, eqMode: 'graphic', graphicBands: 10, graphic: Array(10).fill(0), params: [{ type: 'peaking', freq: 1000, gain: 0, q: 1 }], preamp: 0, eqPreset: 'Flat',
-  toneOn: false, bass: 0, treble: 0, bassFreq: 90, trebleFreq: 9000, limiter: true, ceiling: -1, guard: false, balance: 0, width: 1, mono: false,
+  toneOn: false, bass: 0, treble: 0, bassFreq: 90, trebleFreq: 9000, limiter: true, ceiling: -1, guard: false, balance: 0, width: 1, mono: false, crossfeed: 'off',
   reverb: { on: false, preset: 'Scene', size: 0.245, damp: 0.412, filter: 0.705, fade: 0.503, preDelay: 0.121, preDelayMix: 0.425, mix: 0.45 },
   tempo: 1, semitones: 0, deviceEq: {}, userPresets: {},
   // crossfade, fade, gapless

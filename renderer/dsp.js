@@ -1,7 +1,7 @@
 // 64-bit DSP for shared (Web Audio) output: a line-for-line port of native/dsp.cs, so both outputs sound the same.
 // Keep the two in sync: test/dsp.test.mjs checks they agree to 1e-9. Loaded as an AudioWorklet module ('cadence-dsp')
 // and imported by the tests.
-// stream gain -> width/mono -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> volume -> limiter.
+// stream gain -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> volume -> limiter.
 // The filters are linear, so they run as two chains: every cut first, then every boost, each boost kept as its own part for the
 // give-back limiter. When every stage is neutral the samples pass through untouched (only delayed).
 
@@ -9,9 +9,9 @@ const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 // .NET Math.Round: halves go to the even neighbour (44100 * 0.005 is exactly 220.5)
 const round = v => { const r = Math.round(v); return r - v === 0.5 && r % 2 !== 0 ? r - 1 : r; };
 
-// "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
+// "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;xfeed 0 700 4.5;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
 export function parseConfig(text) {
-  const c = { Pre: 0, Bass: 0, BassF: 90, Treble: 0, TrebleF: 9000, Bal: 0, Width: 1, Ceil: -1, Mono: false, Lim: true, RevOn: false, Guard: false,
+  const c = { Pre: 0, Bass: 0, BassF: 90, Treble: 0, TrebleF: 9000, Bal: 0, Width: 1, Ceil: -1, Mono: false, Xf: false, XfF: 700, XfDb: 4.5, Lim: true, RevOn: false, Guard: false,
     Size: 0, Damp: 0, Filter: 0, Fade: 0, PreDelay: 0, PreDelayMix: 0, Mix: 0, Bands: [] };
   for (const part of String(text).split(';')) {
     const w = part.trim().split(' ').filter(Boolean);
@@ -25,6 +25,7 @@ export function parseConfig(text) {
       case 'bal': c.Bal = clamp(n(1), -1, 1); break;
       case 'width': c.Width = clamp(n(1), 0, 3); break;
       case 'mono': c.Mono = n(1) !== 0; break;
+      case 'xfeed': c.Xf = n(1) !== 0; c.XfF = clamp(n(2), 300, 2000); c.XfDb = clamp(n(3), 1, 15); break;
       case 'lim': c.Lim = n(1) !== 0; break;
       case 'ceil': c.Ceil = clamp(n(1), -6, 0); break;
       case 'guard': c.Guard = n(1) !== 0; break;
@@ -37,7 +38,7 @@ export function parseConfig(text) {
 }
 // stages that change the sound (a lowpass/highpass/notch/... band changes it at any gain)
 function cfgNeutral(c) {
-  if (c.Pre !== 0 || c.Bass !== 0 || c.Treble !== 0 || c.Bal !== 0 || c.Width !== 1 || c.Mono || c.RevOn) return false;
+  if (c.Pre !== 0 || c.Bass !== 0 || c.Treble !== 0 || c.Bal !== 0 || c.Width !== 1 || c.Mono || c.Xf || c.RevOn) return false;
   for (const b of c.Bands) if (!(b.Gain === 0 && (b.Type === 'peaking' || b.Type === 'lowshelf' || b.Type === 'highshelf'))) return false;
   return true;
 }
@@ -110,6 +111,7 @@ export class Dsp {
     this.bassC = new Biquad(); this.bassB = new Biquad(); this.trebC = new Biquad(); this.trebB = new Biquad();
     this.pre = new Smooth(1, 0.02, rate); this.bal = new Smooth(0, 0.02, rate); this.vol = new Smooth(1, 0.015, rate); this.stream = new Smooth(1, 0.02, rate);
     this.wet = new Smooth(0, 0.03, rate); this.dry = new Smooth(1, 0.03, rate);
+    this.xg = new Smooth(0, 0.03, rate); this.xa = 0; this.xlp = 0; // crossfeed amount g, lowpass coefficient and state
     this.Width = 1; this.Mono = false;
     this.lim = new Limiter(rate, SLOTS);
     this.s0 = new Float64Array(2 * BLK); this.acc = new Float64Array(2 * BLK); this.tmp = new Float64Array(2 * BLK); this.gp = new Float64Array(BLK);
@@ -126,7 +128,7 @@ export class Dsp {
   // nothing in flight and every stage neutral: output equals input exactly
   get Neutral() {
     const { pre, bal, vol, stream } = this;
-    if (!cfgNeutral(this.Cfg) || this.rev || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V !== 1 || stream.V !== 1 || pre.V !== 1) return false;
+    if (!cfgNeutral(this.Cfg) || this.rev || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V !== 1 || stream.V !== 1 || pre.V !== 1 || !this.xg.Settled || this.xg.V !== 0) return false;
     for (const b of this.cutQ) if (!b.Identity) return false;
     for (const b of this.boostQ) if (!b.Identity) return false;
     return this.bassC.Identity && this.bassB.Identity && this.trebC.Identity && this.trebB.Identity;
@@ -143,6 +145,7 @@ export class Dsp {
     pair(this.bassC, this.bassB, Biquad.coef('lowshelf', R, c.BassF, c.Bass, 0.7), c.Bass > 0, glide);
     pair(this.trebC, this.trebB, Biquad.coef('highshelf', R, c.TrebleF, c.Treble, 0.7), c.Treble > 0, glide);
     this.pre.T = Math.pow(10, c.Pre / 20); this.bal.T = c.Bal; this.Width = c.Width; this.Mono = c.Mono;
+    this.xg.T = c.Xf ? 1 / (1 + Math.pow(10, c.XfDb / 20)) : 0; this.xa = 1 - Math.exp(-2 * Math.PI * c.XfF / R);
     this.lim.Ceil = Math.pow(10, c.Ceil / 20);
     if (!c.RevOn) { this.rev = null; this.building = null; } // shortcut: toggling reverb shifts the output by its block latency
     else if (this.rev && this.rev.same(c)) this.rev.params(c);
@@ -176,7 +179,7 @@ export class Dsp {
   reset() {
     for (const b of this.cutQ) b.reset(); for (const b of this.boostQ) b.reset();
     this.bassC.reset(); this.bassB.reset(); this.trebC.reset(); this.trebB.reset();
-    this.lim.reset(); this.fresh = true;
+    this.lim.reset(); this.fresh = true; this.xlp = 0;
     if (this.rev) this.rev.reset();
   }
 
@@ -184,7 +187,7 @@ export class Dsp {
   process(x, frames) {
     if (this.building) this.step();
     // a fresh stream starts at its settings, not gliding in from unity (a gliding volume would be limited for a moment)
-    if (this.fresh) { this.fresh = false; for (const s of [this.pre, this.bal, this.vol, this.stream]) s.V = s.T; }
+    if (this.fresh) { this.fresh = false; for (const s of [this.pre, this.bal, this.vol, this.stream, this.xg]) s.V = s.T; }
     // NaN/Inf from a broken decoder would poison every filter state for good: replace with silence
     for (let i = 0; i < 2 * frames; i++) if (x[i] - x[i] !== 0) { x[i] = 0; this.Sanitized++; }
     let exact = true;
@@ -209,14 +212,17 @@ export class Dsp {
     live.fill(0);
     if (!neutral) {
       // stream gain and the cutting part of the preamp go into the base signal; a preamp boost is give-back slot 0
-      let preUp = false;
-      const W = this.Width, mono = this.Mono;
+      let preUp = false, xlp = this.xlp;
+      const W = this.Width, mono = this.Mono, xg = this.xg, xa = this.xa, xf = !xg.Settled || xg.V !== 0;
       for (let i = 0, j = 0; i < n; i++, j += 2) {
         const p = this.pre.next(), g = this.stream.next() * (p < 1 ? p : 1);
         let l = s0[j] * g, r = s0[j + 1] * g;
         if (W !== 1 || mono) { const m = (l + r) * 0.5, sd = (l - r) * 0.5 * (mono ? 0 : W); l = m + sd; r = m - sd; }
+        // crossfeed: the side signal loses 2g of its low end, the mid signal (and so a mono sum) stays exactly as it was
+        if (xf) { const m = (l + r) * 0.5; let sd = (l - r) * 0.5; xlp += xa * (sd - xlp); sd -= 2 * xg.next() * xlp; l = m + sd; r = m - sd; }
         s0[j] = l; s0[j + 1] = r; gp[i] = p > 1 ? p : 1; if (p > 1) preUp = true;
       }
+      this.xlp = !xf || Math.abs(xlp) < 1e-300 ? 0 : xlp;
       // cut chain: the signal with every boost taken out
       for (const b of this.cutQ) if (!b.Identity) b.run(s0, n);
       if (!this.bassC.Identity) this.bassC.run(s0, n);

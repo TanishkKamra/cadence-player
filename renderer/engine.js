@@ -2,6 +2,9 @@
 // helper's native/dsp.cs) -> output device.
 import { biquadCoef, biquadDb } from './dsp.js';
 
+// crossfeed presets (bs2b's): on, corner Hz, how far below the direct sound the crossed bass sits (dB)
+const XFEED = { bs2b: '1 700 4.5', cmoy: '1 700 6', meier: '1 650 9.5' };
+
 export const EQ_FREQS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 // Reverb presets: size, filter, fade, preDelay, mix, preDelayMix, damp (0..1 each)
 export const REVERB_PARAMS = ['size', 'damp', 'filter', 'fade', 'preDelay', 'preDelayMix', 'mix'];
@@ -76,6 +79,7 @@ export class Engine extends EventTarget {
     this.setWidth(o.width);
     this.setReverb(o.reverb);
     this.setMono(!!o.mono);
+    this.setCrossfeed(o.crossfeed);
     this.setGap(o.gap || 0);
     this.setLimiter(o.limiter);
     this.setVolume(o.volume);
@@ -172,7 +176,7 @@ export class Engine extends EventTarget {
       `pre ${o.eqOn ? n(o.preamp) : 0}`,
       ...(o.eqOn ? o.eqBands || [] : []).map(b => `band ${b.type} ${n(b.freq, 1000)} ${n(b.gain)} ${n(b.q, 0.71)}`),
       `bass ${o.toneOn ? n(o.bass) : 0} ${n(o.bassFreq, 90)}`, `treble ${o.toneOn ? n(o.treble) : 0} ${n(o.trebleFreq, 9000)}`,
-      `bal ${n(o.balance)}`, `width ${n(o.width, 1)}`, `mono ${o.mono ? 1 : 0}`, `lim ${o.limiter ? 1 : 0}`, `ceil ${n(o.ceiling, -1)}`, `guard ${o.guard ? 1 : 0}`,
+      `bal ${n(o.balance)}`, `width ${n(o.width, 1)}`, `mono ${o.mono ? 1 : 0}`, `xfeed ${XFEED[o.crossfeed] || '0 700 4.5'}`, `lim ${o.limiter ? 1 : 0}`, `ceil ${n(o.ceiling, -1)}`, `guard ${o.guard ? 1 : 0}`,
       `rev ${r.on ? 1 : 0} ${['size', 'damp', 'filter', 'fade', 'preDelay', 'preDelayMix', 'mix'].map(k => n(r[k])).join(' ')}`,
     ].join(';');
   }
@@ -448,6 +452,7 @@ export class Engine extends EventTarget {
     this.setPlaying(false);
   }
   setMono(on) { this.o.mono = on; this.syncDsp(); }
+  setCrossfeed(v) { this.o.crossfeed = v; this.syncDsp(); }
   setGap(sec) { this.o.gap = sec; this.port.postMessage({ type: 'gap', frames: Math.round(sec * this.ctx.sampleRate) }); }
 
   get position() {

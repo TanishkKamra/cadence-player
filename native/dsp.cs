@@ -1,5 +1,5 @@
 // 64-bit (double) DSP for exclusive output: the same chain as the Web Audio graph in renderer/engine.js, in the same order:
-// stream gain (ReplayGain) -> width/mono -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> volume -> limiter.
+// stream gain (ReplayGain) -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> volume -> limiter.
 // The filters are linear, so they run as two chains: every cut first, then every boost, each boost kept as its own part for the
 // give-back limiter. When every stage is neutral the samples pass through untouched (only delayed), so the output stays bit-perfect.
 using System;
@@ -9,12 +9,13 @@ using System.Linq;
 
 sealed class DspConfig {
   public double Pre, Bass, BassF = 90, Treble, TrebleF = 9000, Bal, Width = 1, Ceil = -1;
-  public bool Mono, Lim = true, RevOn, Guard;
+  public bool Mono, Lim = true, RevOn, Guard, Xf;
+  public double XfF = 700, XfDb = 4.5; // crossfeed corner and how far below the direct sound the crossed bass sits
   public double Size, Damp, Filter, Fade, PreDelay, PreDelayMix, Mix;
   public readonly List<Band> Bands = new List<Band>();
   public struct Band { public string Type; public double Freq, Gain, Q; }
 
-  // "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
+  // "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;xfeed 0 700 4.5;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
   public static DspConfig Parse(string text) {
     var c = new DspConfig();
     foreach (var part in text.Split(';')) {
@@ -29,6 +30,7 @@ sealed class DspConfig {
         case "bal": c.Bal = Clamp(n(1), -1, 1); break;
         case "width": c.Width = Clamp(n(1), 0, 3); break;
         case "mono": c.Mono = n(1) != 0; break;
+        case "xfeed": c.Xf = n(1) != 0; c.XfF = Clamp(n(2), 300, 2000); c.XfDb = Clamp(n(3), 1, 15); break;
         case "lim": c.Lim = n(1) != 0; break;
         case "ceil": c.Ceil = Clamp(n(1), -6, 0); break;   // true-peak ceiling, dBTP
         case "guard": c.Guard = n(1) != 0; break;         // true-peak stage on even when every other stage is neutral
@@ -44,7 +46,7 @@ sealed class DspConfig {
   // stages that change the sound (a lowpass/highpass/notch/... band changes it at any gain)
   public bool Neutral {
     get {
-      if (Pre != 0 || Bass != 0 || Treble != 0 || Bal != 0 || Width != 1 || Mono || RevOn) return false;
+      if (Pre != 0 || Bass != 0 || Treble != 0 || Bal != 0 || Width != 1 || Mono || Xf || RevOn) return false;
       foreach (var b in Bands) if (!(b.Gain == 0 && (b.Type == "peaking" || b.Type == "lowshelf" || b.Type == "highshelf"))) return false;
       return true;
     }
@@ -119,7 +121,7 @@ sealed class Dsp {
   // (its cut twin glides to identity), so a band crossing 0 dB moves over without a click
   readonly List<Biquad> cutQ = new List<Biquad>(), boostQ = new List<Biquad>();
   readonly Biquad bassC = new Biquad(), bassB = new Biquad(), trebC = new Biquad(), trebB = new Biquad();
-  Smooth pre, bal, vol, stream;
+  Smooth pre, bal, vol, stream, xg; double xa, xlp; // xg: crossfeed amount g, xlp: its lowpass state
   public double Width = 1; public bool Mono;
   readonly Limiter lim;
   readonly double[] s0 = new double[2 * BLK], acc = new double[2 * BLK], tmp = new double[2 * BLK], gp = new double[BLK];
@@ -134,7 +136,7 @@ sealed class Dsp {
   public Dsp(int rate) {
     Rate = rate;
     pre.Init(1, 0.02, rate); bal.Init(0, 0.02, rate); vol.Init(1, 0.015, rate); stream.Init(1, 0.02, rate);
-    wet.Init(0, 0.03, rate); dry.Init(1, 0.03, rate);
+    wet.Init(0, 0.03, rate); dry.Init(1, 0.03, rate); xg.Init(0, 0.03, rate);
     lim = new Limiter(rate, SLOTS);
     for (int k = 0; k < SLOTS; k++) dk[k] = new double[2 * BLK];
   }
@@ -146,7 +148,7 @@ sealed class Dsp {
   // nothing in flight and every stage neutral: output equals input exactly
   public bool Neutral {
     get {
-      if (!Cfg.Neutral || rev != null || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V != 1 || stream.V != 1 || pre.V != 1) return false;
+      if (!Cfg.Neutral || rev != null || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V != 1 || stream.V != 1 || pre.V != 1 || !xg.Settled || xg.V != 0) return false;
       foreach (var b in cutQ) if (!b.Identity) return false;
       foreach (var b in boostQ) if (!b.Identity) return false;
       return bassC.Identity && bassB.Identity && trebC.Identity && trebB.Identity;
@@ -169,6 +171,7 @@ sealed class Dsp {
     Pair(trebC, trebB, Biquad.Coef("highshelf", Rate, c.TrebleF, c.Treble, 0.7), c.Treble > 0, glide);
     pre.T = Math.Pow(10, c.Pre / 20); bal.T = c.Bal; Width = c.Width; Mono = c.Mono;
     lim.Ceil = Math.Pow(10, c.Ceil / 20);
+    xg.T = c.Xf ? 1 / (1 + Math.Pow(10, c.XfDb / 20)) : 0; xa = 1 - Math.Exp(-2 * Math.PI * c.XfF / Rate);
     if (!c.RevOn) rev = null; // shortcut: toggling reverb shifts the output by its block latency (one short gap or skip)
     else if (rev != null && rev.Same(c)) rev.Params(c);
     else Build();
@@ -209,7 +212,7 @@ sealed class Dsp {
   public void Reset() {
     foreach (var b in cutQ) b.Reset(); foreach (var b in boostQ) b.Reset();
     bassC.Reset(); bassB.Reset(); trebC.Reset(); trebB.Reset();
-    lim.Reset(); fresh = true;
+    lim.Reset(); fresh = true; xlp = 0;
     if (rev != null) rev.Reset();
   }
 
@@ -217,7 +220,7 @@ sealed class Dsp {
   public void Process(double[] x, int frames) {
     if (building) Swap();
     // a fresh stream starts at its settings, not gliding in from unity (a gliding volume would be limited for a moment)
-    if (fresh) { fresh = false; pre.V = pre.T; bal.V = bal.T; vol.V = vol.T; stream.V = stream.T; }
+    if (fresh) { fresh = false; pre.V = pre.T; bal.V = bal.T; vol.V = vol.T; stream.V = stream.T; xg.V = xg.T; }
     // NaN/Inf from a broken decoder would poison every filter state for good: replace with silence
     for (int i = 0; i < 2 * frames; i++) if (x[i] - x[i] != 0) { x[i] = 0; Sanitized++; }
     bool exact = true;
@@ -240,12 +243,16 @@ sealed class Dsp {
     Array.Clear(live, 0, SLOTS);
     if (!neutral) {
       // stream gain and the cutting part of the preamp go into the base signal; a preamp boost is give-back slot 0
-      bool preUp = false;
+      bool preUp = false, xf = !xg.Settled || xg.V != 0;
       for (int i = 0, j = 0; i < n; i++, j += 2) {
         double p = pre.Next(), g = stream.Next() * (p < 1 ? p : 1), l = s0[j] * g, r = s0[j + 1] * g;
         if (Width != 1 || Mono) { double m = (l + r) * 0.5, sd = (l - r) * 0.5 * (Mono ? 0 : Width); l = m + sd; r = m - sd; }
+      // crossfeed: the side signal loses 2g of its low end (S - 2g LP(S)), so a hard-panned bass reaches the far ear (1-g : g),
+      // the mid signal (and so a mono sum) stays exactly as it was. |1 - 2g LP| <= 1: it never adds level
+        if (xf) { double m = (l + r) * 0.5, sd = (l - r) * 0.5; xlp += xa * (sd - xlp); sd -= 2 * xg.Next() * xlp; l = m + sd; r = m - sd; }
         s0[j] = l; s0[j + 1] = r; gp[i] = p > 1 ? p : 1; if (p > 1) preUp = true;
       }
+      if (!xf || Math.Abs(xlp) < 1e-300) xlp = 0;
       // cut chain: the signal with every boost taken out
       foreach (var b in cutQ) if (!b.Identity) b.Run(s0, n);
       if (!bassC.Identity) bassC.Run(s0, n);

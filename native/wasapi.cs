@@ -649,6 +649,21 @@ static class Wasapi {
       double rt = secs / sw.Elapsed.TotalSeconds;
       ok(rt > 3 && db.ReverbReady, "worst case 192 kHz chain runs " + rt.ToString("0.0") + "x real time");
     }
+    // G4.1 crossfeed: the mono sum is untouched; a hard-left bass reaches the right ear 4.5 dB down, a hard-left 10 kHz hardly
+    {
+      const int r = 48000; int n = r; var xs = new double[2 * n];
+      for (int i = 0; i < 2 * n; i++) xs[i] = rnd.NextDouble() * 0.6 - 0.3;
+      var d = new Dsp(r); d.Apply(DspConfig.Parse("xfeed 1 700 4.5;lim 0")); var o = run(d, xs); int lat = d.Latency; double dm = 0;
+      for (int i = 0; i + lat < n; i++) dm = Math.Max(dm, Math.Abs(o[2 * (i + lat)] + o[2 * (i + lat) + 1] - xs[2 * i] - xs[2 * i + 1]));
+      Func<double, double> ild = f => {
+        var t = new double[2 * n]; for (int i = 0; i < n; i++) t[2 * i] = 0.5 * Math.Sin(2 * Math.PI * f * i / r);
+        var dd = new Dsp(r); dd.Apply(DspConfig.Parse("xfeed 1 700 4.5;lim 0")); var y = run(dd, t); var yr = new double[2 * n];
+        for (int i = 0; i < n; i++) yr[2 * i] = y[2 * i + 1];
+        return 20 * Math.Log10(Amp(y, f, r, n / 2, n) / Amp(yr, f, r, n / 2, n));
+      };
+      double lo = ild(100), hi = ild(10000);
+      ok(dm < 1e-12 && Math.Abs(lo - 4.5) < 0.3 && hi > 20, "crossfeed: mono sum moves " + dm.ToString("0.0e0") + ", hard-left 100 Hz reaches the right " + lo.ToString("0.00") + " dB down, 10 kHz " + hi.ToString("0.0") + " dB down");
+    }
     DeviceTests(ok);
     return fails;
   }
