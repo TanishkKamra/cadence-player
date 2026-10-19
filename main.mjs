@@ -145,6 +145,10 @@ function createWindow() {
   wc.setWindowOpenHandler(() => ({ action: 'deny' }));
   const lock = (e, url) => { if (!url.startsWith('app://ui/')) e.preventDefault(); };
   wc.on('will-navigate', lock); wc.on('will-redirect', lock);
+  // the default menu's zoom-in accelerator is Ctrl+Shift+=; also take plain Ctrl+= and numpad +
+  wc.on('before-input-event', (e, i) => {
+    if (i.type === 'keyDown' && (i.control || i.meta) && !i.alt && (i.key === '=' || i.key === '+')) { e.preventDefault(); wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5)); }
+  });
   wc.on('render-process-gone', (e, d) => {
     killDecoders(); releaseAwake(); flush();
     if (d.reason === 'clean-exit' || win.isDestroyed()) return;
