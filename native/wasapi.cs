@@ -640,14 +640,14 @@ static class Wasapi {
     // 7. speed: 192 kHz, 10 bands + tone + limiter + the largest reverb must run well faster than real time
     {
       const int hr = 192000; var db = new Dsp(hr);
-      var sb = new System.Text.StringBuilder("pre 2;bass 4 90;treble 3 9000;lim 1;rev 1 1 0.5 0.8 1 0.3 0.4 0.5");
+      var sb = new System.Text.StringBuilder("pre 2;bass 4 90;treble 3 9000;lim 1;xfeed 1 700 4.5;spk 1;rev 1 1 0.5 0.8 1 0.3 0.4 0.5");
       for (int k = 0; k < 10; k++) sb.Append(";band peaking " + (31 << k) + " 3 1.41");
       db.Apply(DspConfig.Parse(sb.ToString()));
-      for (int w = 0; w < 2000 && !db.ReverbReady; w++) { db.Process(new double[2000], 1000); Thread.Sleep(5); }
+      for (int w = 0; w < 2000 && !(db.ReverbReady && db.SpeakersReady); w++) { db.Process(new double[2000], 1000); Thread.Sleep(5); }
       var blk = new double[2 * 4800]; var sw = Stopwatch.StartNew(); int secs = 5;
       for (int i = 0; i < secs * hr / 4800; i++) { for (int j = 0; j < blk.Length; j++) blk[j] = rnd.NextDouble() * 0.2 - 0.1; db.Process(blk, 4800); }
       double rt = secs / sw.Elapsed.TotalSeconds;
-      ok(rt > 3 && db.ReverbReady, "worst case 192 kHz chain runs " + rt.ToString("0.0") + "x real time");
+      ok(rt > 3 && db.ReverbReady && db.SpeakersReady, "worst case 192 kHz chain (10 bands, tone, crossfeed, reverb, speakers, limiter) runs " + rt.ToString("0.0") + "x real time");
     }
     // G4.1 crossfeed: the mono sum is untouched; a hard-left bass reaches the right ear 4.5 dB down, a hard-left 10 kHz hardly
     {
@@ -664,7 +664,34 @@ static class Wasapi {
       double lo = ild(100), hi = ild(10000);
       ok(dm < 1e-12 && Math.Abs(lo - 4.5) < 0.3 && hi > 20, "crossfeed: mono sum moves " + dm.ToString("0.0e0") + ", hard-left 100 Hz reaches the right " + lo.ToString("0.00") + " dB down, 10 kHz " + hi.ToString("0.0") + " dB down");
     }
-    DeviceTests(ok);
+    // G4.2 virtual speakers: loudness and 1/3-octave spectrum vs dry for pink noise, independent left and right. Measured from the
+    // running DSP's own impulse responses (a noise measurement of the same thing needs minutes to settle to 0.1 dB in the low bands)
+    foreach (int sr in new[] { 44100, 48000, 96000, 192000 }) {
+      var d = new Dsp(sr); d.Apply(DspConfig.Parse("spk 1;lim 0"));
+      for (int w = 0; w < 2000 && !d.SpeakersReady; w++) { d.Process(new double[0], 0); Thread.Sleep(5); }
+      int lat = d.Latency, M = 1 << 15; while (M < lat + sr * 0.6) M <<= 1;
+      var pw = new double[M / 2]; // per-ear power for uncorrelated left and right, averaged over both ears
+      for (int ch = 0; ch < 2; ch++) {
+        d.Reset(); var dirac = new double[2 * M]; dirac[ch] = 1; var y = run(d, dirac);
+        for (int ear = 0; ear < 2; ear++) {
+          var re = new double[M]; var im = new double[M]; for (int i = 0; i < M; i++) re[i] = y[2 * i + ear];
+          new Fft(M).Run(re, im, false);
+          for (int k = 1; k < M / 2; k++) pw[k] += (re[k] * re[k] + im[k] * im[k]) / 2;
+        }
+      }
+      double worst = 0, ln = 0, ldn = 0; int nb = 0;
+      for (int bi = -16; bi <= 13; bi++) {
+        double fc = 1000 * Math.Pow(2, bi / 3.0), lo = fc * Math.Pow(2, -1 / 6.0), hi = fc * Math.Pow(2, 1 / 6.0), sn = 0, sd = 0;
+        if (hi > sr * 0.45) break;
+        for (int k = (int)Math.Ceiling(lo * M / sr); k < hi * M / sr; k++) { double f = (double)k * sr / M; sn += pw[k] / f; sd += 1 / f; }
+        worst = Math.Max(worst, Math.Abs(10 * Math.Log10(sn / sd))); nb++;
+      }
+      for (int k = (int)Math.Ceiling(20.0 * M / sr); k <= 20000.0 * M / sr && k < M / 2; k++) { double f = (double)k * sr / M; ln += pw[k] / f; ldn += 1 / f; }
+      double loud = 10 * Math.Log10(ln / ldn);
+      ok(d.SpeakersReady && worst <= 0.5 && Math.Abs(loud) <= 0.5, "virtual speakers at " + sr + " Hz: pink-noise loudness " + loud.ToString("+0.00;-0.00") + " dB, " + nb
+        + " 1/3-octave bands from 25 Hz within " + worst.ToString("0.00") + " dB, latency " + lat + " frames");
+    }
+    if (Environment.GetEnvironmentVariable("CADENCE_QUICK") == null) DeviceTests(ok);
     return fails;
   }
   // ---------- the render loop against a fake device (G5.4-G5.7) ----------
@@ -812,7 +839,7 @@ static class Wasapi {
     for (int at = 0; at < frames; at += chunk) {
       while (si < steps.Count && long.Parse(steps[si][0]) <= at) {
         var st = steps[si++];
-        if (st[1] == "cfg") { d.Apply(DspConfig.Parse(st[2])); while (!d.ReverbReady && d.Cfg.RevOn) { d.Process(new double[0], 0); Thread.Sleep(5); } }
+        if (st[1] == "cfg") { d.Apply(DspConfig.Parse(st[2])); while ((!d.ReverbReady && d.Cfg.RevOn) || (!d.SpeakersReady && d.Cfg.Spk)) { d.Process(new double[0], 0); Thread.Sleep(5); } }
         else d.Volume = double.Parse(st[2], CultureInfo.InvariantCulture);
       }
       int n = Math.Min(chunk, frames - at); Array.Copy(x, 2 * at, seg, 0, 2 * n); d.Process(seg, n); Array.Copy(seg, 0, x, 2 * at, 2 * n);

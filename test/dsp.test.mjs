@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { Dsp, parseConfig } from '../renderer/dsp.js';
+import { Dsp, parseConfig, brirFor } from '../renderer/dsp.js';
 
 const exe = fileURLToPath(new URL('../native/cadence-wasapi.exe', import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cadence-dsp-'));
@@ -22,10 +22,12 @@ function signal(rate, sec) {
   }
   return x;
 }
+const brirs = {}, brir = rate => brirs[rate] ??= brirFor(fs.readFileSync(new URL('../renderer/brir.bin', import.meta.url)), rate);
 // the same script as the native --process mode: [frame, 'cfg' | 'vol', value]
 function runJs(rate, steps, x, chunk) {
   const d = new Dsp(rate), y = Float64Array.from(x), seg = new Float64Array(2 * chunk), frames = y.length / 2;
   let si = 0;
+  if (steps.some(s => /spk 1/.test(s[2]))) d.setBrir(brir(rate));
   for (let at = 0; at < frames; at += chunk) {
     while (si < steps.length && steps[si][0] <= at) {
       const [, op, v] = steps[si++];
@@ -54,11 +56,13 @@ const scenarios = [
   ['tone, balance, width', [[0, 'cfg', 'bass 9 90;treble 6 9000;bal -0.4;width 1.6;lim 1;ceil -0.3']]],
   ['mid-stream changes and volume', [[0, 'cfg', 'lim 1'], [0, 'vol', 0.7], [12000, 'cfg', EQ + ';bass 4 120;lim 1'], [30000, 'vol', 1], [40000, 'cfg', 'pre -3;mono 1;band peaking 1000 8 1;lim 1'], [60000, 'cfg', 'lim 1;guard 1']]],
   ['crossfeed', [[0, 'cfg', 'xfeed 1 700 4.5;width 1.3;lim 1'], [30000, 'cfg', 'xfeed 1 650 9.5;bass 6 90;lim 1'], [60000, 'cfg', 'lim 1']]],
+  ['virtual speakers', [[0, 'cfg', 'spk 1;lim 1'], [40000, 'cfg', 'spk 1;bass 6 90;xfeed 1 700 4.5;lim 1'], [70000, 'cfg', 'lim 1']]],
   ['reverb', [[0, 'cfg', 'pre 3;bass 6 90;rev 1 0.3 0.5 0.6 0.4 0.2 0.3 0.4;lim 1'], [50000, 'cfg', 'pre 3;bass 6 90;rev 1 0.3 0.5 0.6 0.4 0.5 0.6 0.2;lim 1']]],
 ];
-for (const rate of [44100, 48000]) {
+// 88.2 kHz: the speaker responses are resampled (from the 96 kHz set) in both cores
+for (const rate of [44100, 48000, 88200]) {
   const x = signal(rate, 2);
-  for (const [name, steps] of scenarios) {
+  for (const [name, steps] of rate === 88200 ? scenarios.filter(s => s[0] === 'virtual speakers') : scenarios) {
     const js = runJs(rate, steps, x, 128), nat = runNative(rate, steps, x, 128);
     let worst = 0;
     for (let i = 0; i < x.length; i++) worst = Math.max(worst, Math.abs(js.y[i] - nat.y[i]));

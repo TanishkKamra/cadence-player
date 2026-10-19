@@ -1,5 +1,5 @@
 // 64-bit (double) DSP for exclusive output: the same chain as the Web Audio graph in renderer/engine.js, in the same order:
-// stream gain (ReplayGain) -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> volume -> limiter.
+// stream gain (ReplayGain) -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> volume -> reverb -> virtual speakers -> limiter.
 // The filters are linear, so they run as two chains: every cut first, then every boost, each boost kept as its own part for the
 // give-back limiter. When every stage is neutral the samples pass through untouched (only delayed), so the output stays bit-perfect.
 using System;
@@ -9,13 +9,13 @@ using System.Linq;
 
 sealed class DspConfig {
   public double Pre, Bass, BassF = 90, Treble, TrebleF = 9000, Bal, Width = 1, Ceil = -1;
-  public bool Mono, Lim = true, RevOn, Guard, Xf;
+  public bool Mono, Lim = true, RevOn, Guard, Xf, Spk;
   public double XfF = 700, XfDb = 4.5; // crossfeed corner and how far below the direct sound the crossed bass sits
   public double Size, Damp, Filter, Fade, PreDelay, PreDelayMix, Mix;
   public readonly List<Band> Bands = new List<Band>();
   public struct Band { public string Type; public double Freq, Gain, Q; }
 
-  // "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;xfeed 0 700 4.5;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
+  // "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;xfeed 0 700 4.5;spk 0;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
   public static DspConfig Parse(string text) {
     var c = new DspConfig();
     foreach (var part in text.Split(';')) {
@@ -31,6 +31,7 @@ sealed class DspConfig {
         case "width": c.Width = Clamp(n(1), 0, 3); break;
         case "mono": c.Mono = n(1) != 0; break;
         case "xfeed": c.Xf = n(1) != 0; c.XfF = Clamp(n(2), 300, 2000); c.XfDb = Clamp(n(3), 1, 15); break;
+        case "spk": c.Spk = n(1) != 0; break;
         case "lim": c.Lim = n(1) != 0; break;
         case "ceil": c.Ceil = Clamp(n(1), -6, 0); break;   // true-peak ceiling, dBTP
         case "guard": c.Guard = n(1) != 0; break;         // true-peak stage on even when every other stage is neutral
@@ -46,7 +47,7 @@ sealed class DspConfig {
   // stages that change the sound (a lowpass/highpass/notch/... band changes it at any gain)
   public bool Neutral {
     get {
-      if (Pre != 0 || Bass != 0 || Treble != 0 || Bal != 0 || Width != 1 || Mono || Xf || RevOn) return false;
+      if (Pre != 0 || Bass != 0 || Treble != 0 || Bal != 0 || Width != 1 || Mono || Xf || Spk || RevOn) return false;
       foreach (var b in Bands) if (!(b.Gain == 0 && (b.Type == "peaking" || b.Type == "lowshelf" || b.Type == "highshelf"))) return false;
       return true;
     }
@@ -127,7 +128,9 @@ sealed class Dsp {
   readonly double[] s0 = new double[2 * BLK], acc = new double[2 * BLK], tmp = new double[2 * BLK], gp = new double[BLK];
   readonly double[][] dk = new double[SLOTS][]; readonly bool[] live = new bool[SLOTS];
   Reverb rev; Smooth wet, dry;
-  public int Latency { get { return lim.L + (rev != null ? rev.B : 0); } }
+  Speakers spk, spkKeep; volatile Speakers spkNew; volatile bool spkDone; bool spkBusy; // spkKeep: built once, kept for the next toggle
+  public int Latency { get { return lim.L + (rev != null ? rev.B : 0) + (spk != null ? spk.B : 0); } }
+  public bool SpeakersReady { get { return spk != null; } }
   public bool ReverbReady { get { return rev != null; } }
   public Limiter Lim { get { return lim; } }
   // the last Process call wrote the delayed input unchanged (no dither needed)
@@ -148,7 +151,7 @@ sealed class Dsp {
   // nothing in flight and every stage neutral: output equals input exactly
   public bool Neutral {
     get {
-      if (!Cfg.Neutral || rev != null || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V != 1 || stream.V != 1 || pre.V != 1 || !xg.Settled || xg.V != 0) return false;
+      if (!Cfg.Neutral || rev != null || spk != null || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V != 1 || stream.V != 1 || pre.V != 1 || !xg.Settled || xg.V != 0) return false;
       foreach (var b in cutQ) if (!b.Identity) return false;
       foreach (var b in boostQ) if (!b.Identity) return false;
       return bassC.Identity && bassB.Identity && trebC.Identity && trebB.Identity;
@@ -176,6 +179,12 @@ sealed class Dsp {
     else if (rev != null && rev.Same(c)) rev.Params(c);
     else Build();
     wet.T = c.RevOn ? c.Mix : 0; dry.T = 1 - (c.RevOn ? c.Mix : 0) * 0.45;
+    if (!c.Spk) spk = null; // shortcut (as for reverb): toggling shifts the output by B frames
+    else if (spk == null && spkKeep != null) { spkKeep.Reset(); spk = spkKeep; }
+    else if (spk == null && !spkBusy) { // resampling the responses takes a moment at other rates: on a pool thread
+      spkBusy = true; int rate = Rate;
+      System.Threading.ThreadPool.QueueUserWorkItem(_ => { var h = Speakers.For(rate); spkNew = h != null ? new Speakers(rate, h) : null; spkDone = true; });
+    }
   }
 
   // EQ + tone magnitude (dB) at f, from the target coefficients
@@ -214,11 +223,13 @@ sealed class Dsp {
     bassC.Reset(); bassB.Reset(); trebC.Reset(); trebB.Reset();
     lim.Reset(); fresh = true; xlp = 0;
     if (rev != null) rev.Reset();
+    if (spk != null) spk.Reset();
   }
 
   // x: interleaved stereo, in place
   public void Process(double[] x, int frames) {
     if (building) Swap();
+    if (spkDone) { spkDone = false; spkBusy = false; spkKeep = spkNew; if (Cfg.Spk && spkKeep != null) spk = spkKeep; }
     // a fresh stream starts at its settings, not gliding in from unity (a gliding volume would be limited for a moment)
     if (fresh) { fresh = false; pre.V = pre.T; bal.V = bal.T; vol.V = vol.T; stream.V = stream.T; xg.V = xg.T; }
     // NaN/Inf from a broken decoder would poison every filter state for good: replace with silence
@@ -271,9 +282,11 @@ sealed class Dsp {
         else { double a = p * Math.PI / 2; Pan(j, v, v * Math.Cos(a), v * Math.Sin(a), false); }
       }
       // reverb: the wet part cannot be split into boosts, so with reverb on everything goes to the base signal
-      if (rev != null) {
+      // and so do the virtual speakers
+      if (rev != null || spk != null) {
         for (int k = 0; k < SLOTS; k++) if (live[k]) { var d = dk[k]; for (int j = 0; j < 2 * n; j++) s0[j] += d[j]; live[k] = false; }
-        rev.Run(s0, n, ref wet, ref dry);
+        if (rev != null) rev.Run(s0, n, ref wet, ref dry);
+        if (spk != null) spk.Run(s0, n);
       }
     }
     bool on = !neutral && Cfg.Lim;
@@ -336,7 +349,7 @@ sealed class Limiter {
   }
   public bool Busy { get { if (!smB.Idle) return true; for (int k = 0; k < slots; k++) if (alive[k]) return true; return false; } }
 
-  static double I0(double x) { double s = 1, t = 1; for (int k = 1; k < 40; k++) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; }
+  internal static double I0(double x) { double s = 1, t = 1; for (int k = 1; k < 40; k++) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; }
   // ITU-R BS.1770-4 Annex 2 example interpolator (4 phases, 12 taps). Its passband ripple makes it read up to ~0.2 dB above the
   // ideal reconstruction on some music, so the detector takes the larger of both: the output passes either meter.
   static readonly double[] ITU0 = { 0.0017089843750, 0.0109863281250, -0.0196533203125, 0.0332031250000, -0.0594482421875, 0.1373291015625, 0.9721679687500, -0.1022949218750, 0.0476074218750, -0.0266113281250, 0.0148925781250, -0.0083007812500 };
@@ -623,6 +636,129 @@ sealed class Reverb {
 }
 
 // iterative radix-2 complex FFT
+// virtual speakers: the signal as two speakers at +-45 degrees in a room would play it to a KU100 dummy head (SADIE II BRIRs,
+// tools/brir.py, embedded as the "brir" resource). Partitioned FFT convolution in uniform blocks of B frames: the output is B
+// frames late. Four paths: each speaker reaches both ears
+sealed class Speakers {
+  public readonly int B; readonly int N, P;
+  readonly double[][] are, aim, bre, bim; // per partition: [LL | LR] and [RL | RR] half spectra (speaker -> ear)
+  readonly double[][] xre, xim; int head; // frequency-domain delay line of input spectra
+  readonly double[] inL, inR, outL, outR, yre, yim, wre, wim; int pos;
+  readonly Fft fft;
+
+  static int[] rates; static float[][][] sets; // the measured sets: [set][LL, LR, RL, RR]
+  static readonly object loadLock = new object();
+  static bool Load() {
+    lock (loadLock) {
+      if (sets != null) return true;
+      using (var s = typeof(Speakers).Assembly.GetManifestResourceStream("brir")) {
+        if (s == null) return false;
+        var br = new System.IO.BinaryReader(s); int n = br.ReadInt32();
+        var r = new int[n]; var st = new float[n][][];
+        for (int i = 0; i < n; i++) {
+          r[i] = br.ReadInt32(); int len = br.ReadInt32(); st[i] = new float[4][];
+          for (int k = 0; k < 4; k++) { st[i][k] = new float[len]; for (int j = 0; j < len; j++) st[i][k][j] = br.ReadSingle(); }
+        }
+        rates = r; sets = st;
+      }
+      return true;
+    }
+  }
+  // the four responses at this rate: the measured set nearest on a log scale, resampled when the rate differs
+  public static double[][] For(int rate) {
+    if (!Load()) return null;
+    int s = 0;
+    for (int i = 1; i < rates.Length; i++) if (Math.Abs(Math.Log((double)rate / rates[i])) < Math.Abs(Math.Log((double)rate / rates[s]))) s = i;
+    var h = new double[4][];
+    for (int k = 0; k < 4; k++) h[k] = Resample(sets[s][k], rates[s], rate);
+    return h;
+  }
+  // windowed sinc (Kaiser beta 8, 32 zero crossings a side, cutoff 0.97 of the lower Nyquist). An impulse response's samples
+  // scale with 1/rate, so its gain is kept. Same rate: an exact copy
+  static double[] WTab;
+  public static double[] Resample(float[] x, int r0, int r1) {
+    var y = new double[r0 == r1 ? x.Length : (int)Math.Round(x.Length * (double)r1 / r0)];
+    if (r0 == r1) { for (int i = 0; i < x.Length; i++) y[i] = x[i]; return y; }
+    if (WTab == null) { var w = new double[4097]; for (int j = 0; j <= 4096; j++) { double r = j / 4096.0; w[j] = Limiter.I0(8 * Math.Sqrt(Math.Max(0, 1 - r * r))) / Limiter.I0(8); } WTab = w; }
+    double ratio = (double)r1 / r0, fc = Math.Min(1, ratio) * 0.97; int hw = (int)Math.Ceiling(32 / fc);
+    for (int m = 0; m < y.Length; m++) {
+      double t = m / ratio, s = 0; int c = (int)Math.Floor(t);
+      for (int k = Math.Max(0, c - hw + 1), e = Math.Min(x.Length - 1, c + hw); k <= e; k++) {
+        double u = t - k, ar = Math.Abs(u) / hw * 4096; int j = (int)ar; if (j >= 4096) continue;
+        double win = WTab[j] + (WTab[j + 1] - WTab[j]) * (ar - j), a = Math.PI * fc * u;
+        s += x[k] * fc * (u == 0 ? 1 : Math.Sin(a) / a) * win;
+      }
+      y[m] = s / ratio;
+    }
+    return y;
+  }
+
+  public Speakers(int rate, double[][] h) {
+    int b = 1; while (b < rate * 0.008) b <<= 1; B = b; N = 2 * B;
+    fft = new Fft(N);
+    int len = h[0].Length; P = (len + B - 1) / B;
+    are = new double[P][]; aim = new double[P][]; bre = new double[P][]; bim = new double[P][]; xre = new double[P][]; xim = new double[P][];
+    var re = new double[N]; var im = new double[N];
+    for (int p = 0; p < P; p++) {
+      for (int pair = 0; pair < 2; pair++) {
+        Array.Clear(re, 0, N); Array.Clear(im, 0, N);
+        for (int i = 0; i < B && p * B + i < len; i++) { re[i] = h[2 * pair][p * B + i]; im[i] = h[2 * pair + 1][p * B + i]; }
+        fft.Run(re, im, false);
+        var dr = new double[2 * (B + 1)]; var di = new double[2 * (B + 1)];
+        Split(re, im, dr, di);
+        if (pair == 0) { are[p] = dr; aim[p] = di; } else { bre[p] = dr; bim[p] = di; }
+      }
+      xre[p] = new double[2 * (B + 1)]; xim[p] = new double[2 * (B + 1)];
+    }
+    inL = new double[N]; inR = new double[N]; outL = new double[B]; outR = new double[B];
+    yre = new double[N]; yim = new double[N]; wre = new double[2 * (B + 1)]; wim = new double[2 * (B + 1)];
+  }
+  public void Reset() {
+    for (int p = 0; p < P; p++) { Array.Clear(xre[p], 0, xre[p].Length); Array.Clear(xim[p], 0, xim[p].Length); }
+    Array.Clear(inL, 0, N); Array.Clear(inR, 0, N); Array.Clear(outL, 0, B); Array.Clear(outR, 0, B); pos = 0;
+  }
+  // full complex spectrum of (a + i b) -> half spectra of a and b: dst[0..B] = a, dst[B+1..2B+1] = b
+  void Split(double[] re, double[] im, double[] dre, double[] dim) {
+    for (int k = 0; k <= B; k++) {
+      int m = (N - k) % N;
+      dre[k] = (re[k] + re[m]) / 2; dim[k] = (im[k] - im[m]) / 2;
+      dre[B + 1 + k] = (im[k] + im[m]) / 2; dim[B + 1 + k] = (re[m] - re[k]) / 2;
+    }
+  }
+  void Block() {
+    head = (head + P - 1) % P;
+    Array.Copy(inL, yre, N); Array.Copy(inR, yim, N);
+    fft.Run(yre, yim, false);
+    Split(yre, yim, xre[head], xim[head]);
+    Array.Clear(wre, 0, wre.Length); Array.Clear(wim, 0, wim.Length);
+    int o = B + 1;
+    for (int p = 0; p < P; p++) {
+      double[] xr = xre[(head + p) % P], xi = xim[(head + p) % P], ar = are[p], ai = aim[p], br = bre[p], bi = bim[p];
+      for (int k = 0; k <= B; k++) {
+        double lr = xr[k], li = xi[k], rr = xr[o + k], ri = xi[o + k];
+        // left ear: L * LL + R * RL; right ear: L * LR + R * RR
+        wre[k] += lr * ar[k] - li * ai[k] + rr * br[k] - ri * bi[k]; wim[k] += lr * ai[k] + li * ar[k] + rr * bi[k] + ri * br[k];
+        wre[o + k] += lr * ar[o + k] - li * ai[o + k] + rr * br[o + k] - ri * bi[o + k]; wim[o + k] += lr * ai[o + k] + li * ar[o + k] + rr * bi[o + k] + ri * br[o + k];
+      }
+    }
+    for (int k = 0; k <= B; k++) {
+      double lr = wre[k], li = wim[k], rr = wre[o + k], ri = wim[o + k];
+      yre[k] = lr - ri; yim[k] = li + rr;
+      if (k > 0 && k < B) { yre[N - k] = lr + ri; yim[N - k] = -li + rr; }
+    }
+    fft.Run(yre, yim, true);
+    for (int i = 0; i < B; i++) { outL[i] = yre[B + i]; outR[i] = yim[B + i]; }
+    Array.Copy(inL, B, inL, 0, B); Array.Copy(inR, B, inR, 0, B);
+  }
+  public void Run(double[] x, int frames) {
+    for (int i = 0, j = 0; i < frames; i++, j += 2) {
+      inL[B + pos] = x[j]; inR[B + pos] = x[j + 1];
+      x[j] = outL[pos]; x[j + 1] = outR[pos];
+      if (++pos == B) { Block(); pos = 0; }
+    }
+  }
+}
+
 sealed class Fft {
   readonly int n; readonly int[] rev; readonly double[] cos, sin;
   public Fft(int n) {

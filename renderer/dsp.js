@@ -1,7 +1,7 @@
 // 64-bit DSP for shared (Web Audio) output: a line-for-line port of native/dsp.cs, so both outputs sound the same.
 // Keep the two in sync: test/dsp.test.mjs checks they agree to 1e-9. Loaded as an AudioWorklet module ('cadence-dsp')
 // and imported by the tests.
-// stream gain -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> volume -> limiter.
+// stream gain -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> virtual speakers -> volume -> limiter.
 // The filters are linear, so they run as two chains: every cut first, then every boost, each boost kept as its own part for the
 // give-back limiter. When every stage is neutral the samples pass through untouched (only delayed).
 
@@ -11,7 +11,7 @@ const round = v => { const r = Math.round(v); return r - v === 0.5 && r % 2 !== 
 
 // "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;xfeed 0 700 4.5;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
 export function parseConfig(text) {
-  const c = { Pre: 0, Bass: 0, BassF: 90, Treble: 0, TrebleF: 9000, Bal: 0, Width: 1, Ceil: -1, Mono: false, Xf: false, XfF: 700, XfDb: 4.5, Lim: true, RevOn: false, Guard: false,
+  const c = { Pre: 0, Bass: 0, BassF: 90, Treble: 0, TrebleF: 9000, Bal: 0, Width: 1, Ceil: -1, Mono: false, Xf: false, XfF: 700, XfDb: 4.5, Spk: false, Lim: true, RevOn: false, Guard: false,
     Size: 0, Damp: 0, Filter: 0, Fade: 0, PreDelay: 0, PreDelayMix: 0, Mix: 0, Bands: [] };
   for (const part of String(text).split(';')) {
     const w = part.trim().split(' ').filter(Boolean);
@@ -26,6 +26,7 @@ export function parseConfig(text) {
       case 'width': c.Width = clamp(n(1), 0, 3); break;
       case 'mono': c.Mono = n(1) !== 0; break;
       case 'xfeed': c.Xf = n(1) !== 0; c.XfF = clamp(n(2), 300, 2000); c.XfDb = clamp(n(3), 1, 15); break;
+      case 'spk': c.Spk = n(1) !== 0; break;
       case 'lim': c.Lim = n(1) !== 0; break;
       case 'ceil': c.Ceil = clamp(n(1), -6, 0); break;
       case 'guard': c.Guard = n(1) !== 0; break;
@@ -38,7 +39,7 @@ export function parseConfig(text) {
 }
 // stages that change the sound (a lowpass/highpass/notch/... band changes it at any gain)
 function cfgNeutral(c) {
-  if (c.Pre !== 0 || c.Bass !== 0 || c.Treble !== 0 || c.Bal !== 0 || c.Width !== 1 || c.Mono || c.Xf || c.RevOn) return false;
+  if (c.Pre !== 0 || c.Bass !== 0 || c.Treble !== 0 || c.Bal !== 0 || c.Width !== 1 || c.Mono || c.Xf || c.Spk || c.RevOn) return false;
   for (const b of c.Bands) if (!(b.Gain === 0 && (b.Type === 'peaking' || b.Type === 'lowshelf' || b.Type === 'highshelf'))) return false;
   return true;
 }
@@ -116,11 +117,14 @@ export class Dsp {
     this.lim = new Limiter(rate, SLOTS);
     this.s0 = new Float64Array(2 * BLK); this.acc = new Float64Array(2 * BLK); this.tmp = new Float64Array(2 * BLK); this.gp = new Float64Array(BLK);
     this.dk = Array.from({ length: SLOTS }, () => new Float64Array(2 * BLK)); this.live = new Uint8Array(SLOTS);
+    this.spk = null; this.spkKeep = null; this.spkIr = null; // spkIr: the responses at this rate (setBrir), spkKeep: built once
     this.rev = null; this.building = null; this.fresh = true; this.Sanitized = 0; this.Exact = false;
     this.tap = null; // optional: post-EQ, pre-balance copy of the signal for visualizers (shared output only)
   }
-  get Latency() { return this.lim.L + (this.rev ? this.rev.B : 0); }
+  get Latency() { return this.lim.L + (this.rev ? this.rev.B : 0) + (this.spk ? this.spk.B : 0); }
   get ReverbReady() { return !!this.rev; }
+  get SpeakersReady() { return !!this.spk; }
+  setBrir(h) { this.spkIr = h; this.spkKeep = null; this.spk = null; if (this.Cfg) this.apply(this.Cfg); }
   get Lim() { return this.lim; }
   set StreamGain(v) { this.stream.T = v; }
   set Volume(v) { this.vol.T = v; }
@@ -128,7 +132,7 @@ export class Dsp {
   // nothing in flight and every stage neutral: output equals input exactly
   get Neutral() {
     const { pre, bal, vol, stream } = this;
-    if (!cfgNeutral(this.Cfg) || this.rev || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V !== 1 || stream.V !== 1 || pre.V !== 1 || !this.xg.Settled || this.xg.V !== 0) return false;
+    if (!cfgNeutral(this.Cfg) || this.rev || this.spk || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V !== 1 || stream.V !== 1 || pre.V !== 1 || !this.xg.Settled || this.xg.V !== 0) return false;
     for (const b of this.cutQ) if (!b.Identity) return false;
     for (const b of this.boostQ) if (!b.Identity) return false;
     return this.bassC.Identity && this.bassB.Identity && this.trebC.Identity && this.trebB.Identity;
@@ -150,6 +154,8 @@ export class Dsp {
     if (!c.RevOn) { this.rev = null; this.building = null; } // shortcut: toggling reverb shifts the output by its block latency
     else if (this.rev && this.rev.same(c)) this.rev.params(c);
     else if (!this.building || !this.building.rev.same(c)) this.building = Reverb.build(R, c); // built a step per render quantum
+    if (!c.Spk) this.spk = null; // shortcut (as for reverb): toggling shifts the output by B frames
+    else if (!this.spk && this.spkIr) { if (this.spkKeep) this.spkKeep.reset(); else this.spkKeep = new Speakers(R, this.spkIr); this.spk = this.spkKeep; }
     this.wet.T = c.RevOn ? c.Mix : 0; this.dry.T = 1 - (c.RevOn ? c.Mix : 0) * 0.45;
   }
 
@@ -181,6 +187,7 @@ export class Dsp {
     this.bassC.reset(); this.bassB.reset(); this.trebC.reset(); this.trebB.reset();
     this.lim.reset(); this.fresh = true; this.xlp = 0;
     if (this.rev) this.rev.reset();
+    if (this.spk) this.spk.reset();
   }
 
   // x: interleaved stereo Float64Array, in place
@@ -242,9 +249,11 @@ export class Dsp {
         else { const a = p * Math.PI / 2; this.pan(j, v, v * Math.cos(a), v * Math.sin(a), false); }
       }
       // reverb: the wet part cannot be split into boosts, so with reverb on everything goes to the base signal
-      if (this.rev) {
+      // and so do the virtual speakers
+      if (this.rev || this.spk) {
         for (let k = 0; k < SLOTS; k++) if (live[k]) { const d = dk[k]; for (let j = 0; j < 2 * n; j++) s0[j] += d[j]; live[k] = 0; }
-        this.rev.run(s0, n, this.wet, this.dry);
+        if (this.rev) this.rev.run(s0, n, this.wet, this.dry);
+        if (this.spk) this.spk.run(s0, n);
       }
     } else if (this.tap) this.tap.set(s0.subarray(0, 2 * n), 2 * at);
     const on = !neutral && this.Cfg.Lim;
@@ -592,6 +601,107 @@ class Reverb {
   }
 }
 
+// virtual speakers (see native/dsp.cs): partitioned FFT convolution with the SADIE II responses, B frames late.
+// brirFor parses renderer/brir.bin and returns the four responses (LL, LR, RL, RR) at a rate; post them as { brir }.
+export function brirFor(buf, rate) {
+  const b = buf.buffer ? buf : new Uint8Array(buf), v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  let o = 4; const sets = [];
+  for (let i = 0, n = v.getInt32(0, true); i < n; i++) {
+    const r = v.getInt32(o, true), len = v.getInt32(o + 4, true); o += 8; const h = [];
+    for (let k = 0; k < 4; k++, o += 4 * len) { const x = new Float32Array(len); for (let j = 0; j < len; j++) x[j] = v.getFloat32(o + 4 * j, true); h.push(x); }
+    sets.push({ r, h });
+  }
+  let s = 0;
+  for (let i = 1; i < sets.length; i++) if (Math.abs(Math.log(rate / sets[i].r)) < Math.abs(Math.log(rate / sets[s].r))) s = i;
+  return sets[s].h.map(x => resample(x, sets[s].r, rate));
+}
+// windowed sinc (Kaiser beta 8, 32 zero crossings a side, cutoff 0.97 of the lower Nyquist); an impulse response keeps its gain
+let WTab = null;
+function resample(x, r0, r1) {
+  const y = new Float64Array(r0 === r1 ? x.length : Math.round(x.length * r1 / r0));
+  if (r0 === r1) { y.set(x); return y; }
+  if (!WTab) { WTab = new Float64Array(4097); for (let j = 0; j <= 4096; j++) { const r = j / 4096; WTab[j] = I0(8 * Math.sqrt(Math.max(0, 1 - r * r))) / I0(8); } }
+  const ratio = r1 / r0, fc = Math.min(1, ratio) * 0.97, hw = Math.ceil(32 / fc);
+  for (let m = 0; m < y.length; m++) {
+    const t = m / ratio, c = Math.floor(t); let s = 0;
+    for (let k = Math.max(0, c - hw + 1), e = Math.min(x.length - 1, c + hw); k <= e; k++) {
+      const u = t - k, ar = Math.abs(u) / hw * 4096, j = Math.trunc(ar); if (j >= 4096) continue;
+      const win = WTab[j] + (WTab[j + 1] - WTab[j]) * (ar - j), a = Math.PI * fc * u;
+      s += x[k] * fc * (u === 0 ? 1 : Math.sin(a) / a) * win;
+    }
+    y[m] = s / ratio;
+  }
+  return y;
+}
+class Speakers {
+  constructor(rate, h) {
+    let b = 1; while (b < rate * 0.008) b <<= 1; const B = this.B = b, N = this.N = 2 * B;
+    this.fft = new Fft(N);
+    const len = h[0].length, P = this.P = Math.ceil(len / B), H = 2 * (B + 1);
+    this.are = []; this.aim = []; this.bre = []; this.bim = []; this.xre = []; this.xim = []; this.head = 0;
+    const re = new Float64Array(N), im = new Float64Array(N);
+    for (let p = 0; p < P; p++) {
+      for (let pair = 0; pair < 2; pair++) {
+        re.fill(0); im.fill(0);
+        for (let i = 0; i < B && p * B + i < len; i++) { re[i] = h[2 * pair][p * B + i]; im[i] = h[2 * pair + 1][p * B + i]; }
+        this.fft.run(re, im, false);
+        const dr = new Float64Array(H), di = new Float64Array(H);
+        this.split(re, im, dr, di);
+        if (pair === 0) { this.are.push(dr); this.aim.push(di); } else { this.bre.push(dr); this.bim.push(di); }
+      }
+      this.xre.push(new Float64Array(H)); this.xim.push(new Float64Array(H));
+    }
+    this.inL = new Float64Array(N); this.inR = new Float64Array(N); this.outL = new Float64Array(B); this.outR = new Float64Array(B);
+    this.yre = new Float64Array(N); this.yim = new Float64Array(N); this.wre = new Float64Array(H); this.wim = new Float64Array(H); this.pos = 0;
+  }
+  reset() {
+    for (let p = 0; p < this.P; p++) { this.xre[p].fill(0); this.xim[p].fill(0); }
+    this.inL.fill(0); this.inR.fill(0); this.outL.fill(0); this.outR.fill(0); this.pos = 0;
+  }
+  // full complex spectrum of (a + i b) -> half spectra of a and b: dst[0..B] = a, dst[B+1..2B+1] = b
+  split(re, im, dre, dim) {
+    const B = this.B, N = this.N;
+    for (let k = 0; k <= B; k++) {
+      const m = (N - k) % N;
+      dre[k] = (re[k] + re[m]) / 2; dim[k] = (im[k] - im[m]) / 2;
+      dre[B + 1 + k] = (im[k] + im[m]) / 2; dim[B + 1 + k] = (re[m] - re[k]) / 2;
+    }
+  }
+  block() {
+    const B = this.B, N = this.N, P = this.P, o = B + 1, yre = this.yre, yim = this.yim, wre = this.wre, wim = this.wim;
+    this.head = (this.head + P - 1) % P;
+    yre.set(this.inL); yim.set(this.inR);
+    this.fft.run(yre, yim, false);
+    this.split(yre, yim, this.xre[this.head], this.xim[this.head]);
+    wre.fill(0); wim.fill(0);
+    for (let p = 0; p < P; p++) {
+      const q = (this.head + p) % P, xr = this.xre[q], xi = this.xim[q], ar = this.are[p], ai = this.aim[p], br = this.bre[p], bi = this.bim[p];
+      for (let k = 0; k <= B; k++) {
+        const lr = xr[k], li = xi[k], rr = xr[o + k], ri = xi[o + k];
+        // left ear: L * LL + R * RL; right ear: L * LR + R * RR
+        wre[k] += lr * ar[k] - li * ai[k] + rr * br[k] - ri * bi[k]; wim[k] += lr * ai[k] + li * ar[k] + rr * bi[k] + ri * br[k];
+        wre[o + k] += lr * ar[o + k] - li * ai[o + k] + rr * br[o + k] - ri * bi[o + k]; wim[o + k] += lr * ai[o + k] + li * ar[o + k] + rr * bi[o + k] + ri * br[o + k];
+      }
+    }
+    for (let k = 0; k <= B; k++) {
+      const lr = wre[k], li = wim[k], rr = wre[o + k], ri = wim[o + k];
+      yre[k] = lr - ri; yim[k] = li + rr;
+      if (k > 0 && k < B) { yre[N - k] = lr + ri; yim[N - k] = -li + rr; }
+    }
+    this.fft.run(yre, yim, true);
+    for (let i = 0; i < B; i++) { this.outL[i] = yre[B + i]; this.outR[i] = yim[B + i]; }
+    this.inL.copyWithin(0, B, N); this.inR.copyWithin(0, B, N);
+  }
+  run(x, frames) {
+    const B = this.B;
+    for (let i = 0, j = 0; i < frames; i++, j += 2) {
+      this.inL[B + this.pos] = x[j]; this.inR[B + this.pos] = x[j + 1];
+      x[j] = this.outL[this.pos]; x[j + 1] = this.outR[this.pos];
+      if (++this.pos === B) { this.block(); this.pos = 0; }
+    }
+  }
+}
+
 // iterative radix-2 complex FFT
 class Fft {
   constructor(n) {
@@ -618,7 +728,7 @@ class Fft {
 }
 
 // AudioWorklet: input = the player's stereo output; output 0 = processed, output 1 = post-EQ copy for visualizers.
-// Messages: { dsp: text } (DspConfig format above), { volume: gain }, { reset: true }. Posts { latency } when it changes.
+// Messages: { dsp: text } (DspConfig format above), { volume: gain }, { reset: true }, { brir: brirFor(...) }. Posts { latency } when it changes.
 if (typeof registerProcessor === 'function') {
   registerProcessor('cadence-dsp', class extends AudioWorkletProcessor {
     constructor() {
@@ -628,6 +738,7 @@ if (typeof registerProcessor === 'function') {
         if (m.dsp != null) this.dsp.apply(parseConfig(m.dsp));
         if (m.volume != null) this.dsp.Volume = m.volume;
         if (m.reset) this.dsp.reset();
+        if (m.brir) this.dsp.setBrir(m.brir);
       };
     }
     process(inputs, outputs) {

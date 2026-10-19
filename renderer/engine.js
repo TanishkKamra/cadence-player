@@ -1,6 +1,6 @@
 // Audio engine: ffmpeg (main process) -> worklet PCM player -> 64-bit DSP worklet (dsp.js, the same code as the exclusive
 // helper's native/dsp.cs) -> output device.
-import { biquadCoef, biquadDb } from './dsp.js';
+import { biquadCoef, biquadDb, brirFor } from './dsp.js';
 
 // crossfeed presets (bs2b's): on, corner Hz, how far below the direct sound the crossed bass sits (dB)
 const XFEED = { bs2b: '1 700 4.5', cmoy: '1 700 6', meier: '1 650 9.5' };
@@ -167,8 +167,20 @@ export class Engine extends EventTarget {
     queueMicrotask(() => {
       this.dspQueued = false;
       if (this.o.exclusive) this.port.postMessage({ type: 'dsp', text: this.dspText() });
-      else this.dsp?.port.postMessage({ dsp: this.dspText() });
+      else {
+        if (this.o.speakers && this.dsp) this.sendBrir();
+        this.dsp?.port.postMessage({ dsp: this.dspText() });
+      }
     });
+  }
+  // the virtual speakers' responses at the context rate, loaded the first time they are turned on (the native helper embeds them)
+  async sendBrir() {
+    if (this.brirSent === this.dsp) return;
+    const node = this.brirSent = this.dsp;
+    try {
+      const h = brirFor(await (await fetch('brir.bin')).arrayBuffer(), this.ctx.sampleRate);
+      node.port.postMessage({ brir: h }, h.map(x => x.buffer));
+    } catch (e) { console.warn('virtual speakers:', e); this.brirSent = null; }
   }
   dspText() {
     const o = this.o, r = o.reverb || {}, n = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
@@ -176,7 +188,7 @@ export class Engine extends EventTarget {
       `pre ${o.eqOn ? n(o.preamp) : 0}`,
       ...(o.eqOn ? o.eqBands || [] : []).map(b => `band ${b.type} ${n(b.freq, 1000)} ${n(b.gain)} ${n(b.q, 0.71)}`),
       `bass ${o.toneOn ? n(o.bass) : 0} ${n(o.bassFreq, 90)}`, `treble ${o.toneOn ? n(o.treble) : 0} ${n(o.trebleFreq, 9000)}`,
-      `bal ${n(o.balance)}`, `width ${n(o.width, 1)}`, `mono ${o.mono ? 1 : 0}`, `xfeed ${XFEED[o.crossfeed] || '0 700 4.5'}`, `lim ${o.limiter ? 1 : 0}`, `ceil ${n(o.ceiling, -1)}`, `guard ${o.guard ? 1 : 0}`,
+      `bal ${n(o.balance)}`, `width ${n(o.width, 1)}`, `mono ${o.mono ? 1 : 0}`, `xfeed ${XFEED[o.crossfeed] || '0 700 4.5'}`, `spk ${o.speakers ? 1 : 0}`, `lim ${o.limiter ? 1 : 0}`, `ceil ${n(o.ceiling, -1)}`, `guard ${o.guard ? 1 : 0}`,
       `rev ${r.on ? 1 : 0} ${['size', 'damp', 'filter', 'fade', 'preDelay', 'preDelayMix', 'mix'].map(k => n(r[k])).join(' ')}`,
     ].join(';');
   }
@@ -453,6 +465,7 @@ export class Engine extends EventTarget {
   }
   setMono(on) { this.o.mono = on; this.syncDsp(); }
   setCrossfeed(v) { this.o.crossfeed = v; this.syncDsp(); }
+  setSpeakers(on) { this.o.speakers = on; this.syncDsp(); }
   setGap(sec) { this.o.gap = sec; this.port.postMessage({ type: 'gap', frames: Math.round(sec * this.ctx.sampleRate) }); }
 
   get position() {

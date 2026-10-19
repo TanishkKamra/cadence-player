@@ -21,6 +21,7 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
   - 8,850 AutoEq headphone profiles.
 - Tone & Volume: bass and treble with their frequencies, balance, stereo expand, mono, tempo, pitch, volume.
 - Reverb: Size, Damp, Filter, Fade, Pre-Delay, Pre-Delay Mix, Mix, with the nine -named presets.
+- Headphones: crossfeed (bs2b, Chu Moy, Jan Meier presets) and virtual speakers (off by default).
 - Limiter, and an Audio Info panel showing the full signal chain (Ctrl+I).
 
 **Library**
@@ -73,6 +74,8 @@ npm test            # lyrics parser + queue self-checks
 npm run dist        # build release\Cadence-win32-x64\Cadence.exe
 ```
 User data (library cache, covers, settings, playlists, stats) lives in `%APPDATA%\Cadence`.
+
+Virtual speakers: room responses of the SADIE II database (subject D1, KU100 dummy head, speakers at ±45°), University of York, Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0), DOI 10.3390/app8112029. Modified for `renderer/brir.bin` by `tools/brir.py`: equalized flat, onset and tail trimmed, resampled.
 
 Design: Geist / Geist Mono typefaces (SIL OFL, `renderer/fonts`) and Phosphor Light icons (MIT, generated into `renderer/icons.js` from `@phosphor-icons/core`).
 

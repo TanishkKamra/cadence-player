@@ -91,7 +91,7 @@ export async function syncEngine() {
   const outChanged = (set.device || '') !== (o.device || '') || (set.sampleRate || 0) !== (o.sampleRate || 0);
   Object.assign(o, {
     eqOn: set.eqOn, eqBands: eqBands(), preamp: set.preamp, toneOn: set.toneOn, bass: set.bass, treble: set.treble, bassFreq: set.bassFreq, trebleFreq: set.trebleFreq,
-    limiter: set.limiter, ceiling: set.ceiling, guard: set.guard, reverb: set.reverb, rgMode: set.rgMode, mono: set.mono, crossfeed: set.crossfeed, width: set.width, balance: set.balance, volume: set.volume, gap: set.gap,
+    limiter: set.limiter, ceiling: set.ceiling, guard: set.guard, reverb: set.reverb, rgMode: set.rgMode, mono: set.mono, crossfeed: set.crossfeed, speakers: set.speakers, width: set.width, balance: set.balance, volume: set.volume, gap: set.gap,
   });
   if (outChanged) await engine.setOutput(set.device, set.sampleRate);
   if (!!set.exclusive !== !!o.exclusive) { engine.xoFallback = false; await engine.setExclusive(!!set.exclusive); }
@@ -357,7 +357,7 @@ async function boot() {
   const eng = new Engine({
     sampleRate: set.sampleRate || 0, device: set.device, volume: set.volume, exclusive: !!set.exclusive,
     eqOn: set.eqOn, eqBands: eqBands(), preamp: set.preamp, toneOn: set.toneOn, bass: set.bass, treble: set.treble, bassFreq: set.bassFreq, trebleFreq: set.trebleFreq,
-    balance: set.balance, width: set.width, mono: set.mono, crossfeed: set.crossfeed, reverb: set.reverb, limiter: set.limiter, ceiling: set.ceiling, guard: set.guard, gap: set.gap,
+    balance: set.balance, width: set.width, mono: set.mono, crossfeed: set.crossfeed, speakers: set.speakers, reverb: set.reverb, limiter: set.limiter, ceiling: set.ceiling, guard: set.guard, gap: set.gap,
     crossfade: set.xfMode === 'none' ? 0 : set.crossfadeLen, skipFade: skipFadeSec(), fadePause: set.fadePause, seekFade: set.seekFade,
     rgMode: set.rgMode, rgPreamp: set.rgPreamp, noRgPreamp: set.noRgPreamp, preventClip: set.preventClip,
     tempo: set.tempo, semitones: set.semitones,
