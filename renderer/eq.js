@@ -415,17 +415,26 @@ async function autoEqDialog() {
     const hits = (q.length ? index.filter(x => q.every(w => (x.name + ' ' + x.source).toLowerCase().includes(w))) : index).slice(0, 150);
     list.replaceChildren(...(hits.length ? hits.map(x =>h('button', { class: 'aeq-row', onclick: async () => {
       try {
-        const p = await api.invoke('autoeq:get', x);
-        loadPreset(`AutoEq: ${x.name}`, { mode: 'parametric', params: p.bands, preamp: p.preamp });
-        set.userPresets[`AutoEq: ${x.name}`] = { mode: 'parametric', params: p.bands, preamp: p.preamp };
+        const p = await api.invoke('autoeq:get', x), name = `AutoEq: ${x.name}${tilt.b || tilt.t ? ` (bass ${tilt.b}, treble ${tilt.t})` : ''}`;
+        // AutoEq's own taste knobs: a 105 Hz low shelf and a 10 kHz high shelf on top of the correction (boosts are the limiter's)
+        const params = [...p.bands, ...(tilt.b ? [{ type: 'lowshelf', freq: 105, gain: tilt.b, q: 0.7 }] : []), ...(tilt.t ? [{ type: 'highshelf', freq: 10000, gain: tilt.t, q: 0.7 }] : [])];
+        loadPreset(name, { mode: 'parametric', params, preamp: p.preamp });
+        set.userPresets[name] = { mode: 'parametric', params, preamp: p.preamp };
         saveSettings();
         document.querySelector('.scrim')?.remove();
-        toast(`Loaded AutoEq profile for ${x.name}`);
+        toast(`Loaded ${x.name}, via AutoEq, measured by ${x.source}`);
         render();
       } catch (err) { toast('AutoEq: ' + err.message, true); }
     } }, h('b', {}, x.name), h('span', {}, x.source))) : [h('div', { class: 'hint' }, 'No matches')]));
   };
   input.addEventListener('input', debounce(draw, 120));
+  const tilt = { b: set.aeqBass || 0, t: set.aeqTreble || 0 };
+  const knob = (label, k, key) => {
+    const out = h('span', {}, `${tilt[k] > 0 ? '+' : ''}${tilt[k]} dB`), s = h('input', { type: 'range', min: -10, max: 10, step: 0.5, value: tilt[k], 'aria-label': label });
+    s.addEventListener('input', () => { tilt[k] = +s.value; set[key] = tilt[k]; saveSettings(); out.textContent = `${tilt[k] > 0 ? '+' : ''}${tilt[k]} dB`; });
+    return h('label', { class: 'aeq-tilt' }, label, s, out);
+  };
+  const tilts = h('div', {}, knob('Bass (105 Hz shelf)', 'b', 'aeqBass'), knob('Treble (10 kHz shelf)', 't', 'aeqTreble'));
   api.invoke('autoeq:index').then(ix => { index = ix; draw(); }).catch(() => list.replaceChildren(h('div', { class: 'hint' }, 'Couldn’t reach the AutoEq database. Check your connection.')));
-  dialog('AutoEq headphone profiles', h('div', {}, input, list, h('div', { class: 'hint' }, 'Profiles from the open-source AutoEq project correct each headphone toward a neutral target. Loaded profiles are saved to “Your presets”.')), [{ label: 'Close', id: null }], true);
+  dialog('AutoEq headphone profiles', h('div', {}, input, tilts, list, h('div', { class: 'hint' }, 'Profiles from the open-source AutoEq project correct each headphone toward a neutral target; bass and treble are added on top, to taste. Loaded profiles are saved to “Your presets”.')), [{ label: 'Close', id: null }], true);
 }
