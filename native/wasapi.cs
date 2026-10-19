@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -177,15 +178,16 @@ static class Wasapi {
     if (k == 0 && T == 0) return; // nothing to play yet
     Array.Clear(xbuf, 2 * k, 2 * (avail - k)); // underrun / tail: silence, run through the DSP so delays and reverb play out
     if (k < avail) chunks.Add(new double[] { k, avail - k, -1 });
+    bool exact = true;
     foreach (var c in chunks) {
       int at = (int)c[0], n = (int)c[1];
       if (c[2] >= 0) dsp.StreamGain = c[2];
       if (seg.Length < 2 * n) seg = new double[2 * n];
       Array.Copy(xbuf, 2 * at, seg, 0, 2 * n);
-      dsp.Process(seg, n);
+      dsp.Process(seg, n); exact &= dsp.Exact;
       Array.Copy(seg, 0, xbuf, 2 * at, 2 * n);
     }
-    Quantize(xbuf, avail, scratch, !dsp.Neutral);
+    Quantize(xbuf, avail, scratch, !exact);
     IntPtr p;
     rc.GetBuffer((uint)avail, out p);
     Marshal.Copy(scratch, 0, p, avail * fb);
@@ -401,13 +403,15 @@ static class Wasapi {
     var rnd = new Random(7);
     Func<Dsp, double[], double[]> run = (d, src) => { var buf = (double[])src.Clone(); for (int at = 0; at < buf.Length / 2; at += 1000) { int n = Math.Min(1000, buf.Length / 2 - at); var sg = new double[2 * n]; Array.Copy(buf, 2 * at, sg, 0, 2 * n); d.Process(sg, n); Array.Copy(sg, 0, buf, 2 * at, 2 * n); } return buf; };
 
-    // 1. neutral chain: 24-bit samples come out identical, only delayed by the limiter look-ahead; quantized bytes match
-    var dsp = new Dsp(fs); dsp.Apply(DspConfig.Parse("pre 0;band peaking 131 0 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;rev 0;lim 1"));
+    // 1. neutral chain at each common rate: 24-bit samples come out identical, only delayed by the look-ahead; quantized bytes match (G1.1)
     int F = 20000; var x = new double[2 * F];
     for (int i = 0; i < x.Length; i++) x[i] = (rnd.Next(-8388608, 8388608) << 8) / 2147483648.0;
-    var y = run(dsp, x); int D = dsp.Latency; bool exact = dsp.Neutral;
-    for (int i = 2 * D; i < y.Length; i++) if (y[i] != x[i - 2 * D]) { exact = false; break; }
-    ok(exact, "neutral chain is bit-exact (latency " + D + " frames)");
+    foreach (int r in new[] { 44100, 48000, 96000 }) {
+      var dsp = new Dsp(r); dsp.Apply(DspConfig.Parse("pre 0;band peaking 131 0 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;rev 0;lim 1"));
+      var y = run(dsp, x); int D = dsp.Latency; bool exact = dsp.Neutral && dsp.Exact;
+      for (int i = 2 * D; i < y.Length; i++) if (y[i] != x[i - 2 * D]) { exact = false; break; }
+      ok(exact, "neutral chain is bit-exact at " + r + " Hz (latency " + D + " frames)");
+    }
     outBytes = 3; valid = 24; var bytes = new byte[6 * F]; Quantize(x, F, bytes, false); bool same = true;
     for (int i = 0; i < 2 * F && same; i++) { int s32 = (int)Math.Round(x[i] * 2147483648.0); for (int b = 1; b < 4; b++) if (bytes[3 * i + b - 1] != (byte)(s32 >> (8 * b))) same = false; }
     ok(same, "24-bit quantize without dither returns the source bytes");
@@ -423,11 +427,93 @@ static class Wasapi {
     ok(Math.Abs(g100) < 0.1, "100 Hz untouched by the 1 kHz band: " + g100.ToString("0.000") + " dB");
     ok(Math.Abs(gainAt(1000, "pre -3;lim 1") + 3) < 0.01, "preamp -3 dB");
 
-    // 3. limiter: +12 dB bass boost on a full-scale 60 Hz tone never passes -0.3 dBFS
-    var dl = new Dsp(fs); dl.Apply(DspConfig.Parse("bass 12 120;lim 1")); var b2 = new double[4 * fs];
-    for (int i = 0; i < 2 * fs; i++) b2[2 * i] = b2[2 * i + 1] = 0.99 * Math.Sin(2 * Math.PI * 60 * i / fs);
-    var lo = run(dl, b2); double peak = 0; foreach (var v in lo) peak = Math.Max(peak, Math.Abs(v));
-    ok(peak <= Math.Pow(10, -0.3 / 20) + 1e-9, "limiter ceiling holds: peak " + (20 * Math.Log10(peak)).ToString("0.00") + " dBFS");
+    // 3. true peak (G2.1): the output never passes the ceiling, by the ITU BS.1770-4 meter or a fine reference meter
+    foreach (int r in new[] { 44100, 48000 }) {
+      int n = 2 * r;
+      var quarter = new double[2 * n]; var white = new double[2 * n]; var bass = new double[2 * n]; var hf = new double[2 * n]; var sq = new double[2 * n];
+      for (int i = 0; i < n; i++) quarter[2 * i] = quarter[2 * i + 1] = Math.Max(-0.99, Math.Min(0.99, 0.99 * Math.Sqrt(2) * Math.Sin(Math.PI / 2 * i + Math.PI / 4)));
+      for (int i = 0; i < 2 * n; i++) white[i] = rnd.NextDouble() - 0.5;
+      for (int i = 0; i < n; i++) bass[2 * i] = bass[2 * i + 1] = 0.99 * Math.Sin(2 * Math.PI * 60 * i / r);
+      for (int i = 0; i < n; i++) { hf[2 * i] = 0.99 * Math.Sin(2 * Math.PI * 20000 * i / r + 0.3); hf[2 * i + 1] = 0.99 * Math.Sin(2 * Math.PI * 20000 * i / r + 1.1); }
+      for (int i = 0; i < n; i++) sq[2 * i] = sq[2 * i + 1] = (i / 24) % 2 == 0 ? 0.99 : -0.99;
+      var cases = new[] {
+        new { s = quarter, cfg = "pre 0.01", name = "fs/4 at 45 deg, samples 0.99" }, new { s = hf, cfg = "pre 0.01", name = "20 kHz 0.99" },
+        new { s = sq, cfg = "pre 0.01", name = "square 0.99" }, new { s = bass, cfg = "bass 12 120", name = "60 Hz 0.99, bass +12" },
+        new { s = white, cfg = "pre 6", name = "white noise +6" }, new { s = white, cfg = "pre 6;treble 6 6000", name = "white noise +6, treble +6" },
+        new { s = white, cfg = "bass 12 120;band peaking 3000 9 0.7", name = "white noise, bass +12, 3 kHz +9" } };
+      foreach (var c in cases)
+        foreach (string ceil in new[] { "-1", "-0.3" }) {
+          var d = new Dsp(r); d.Apply(DspConfig.Parse(c.cfg + ";lim 1;ceil " + ceil)); var o = run(d, c.s);
+          double itu, refp, cl = double.Parse(ceil, CultureInfo.InvariantCulture); TruePeak(o, r / 2, out itu, out refp);
+          ok(itu <= cl + 1e-6 && refp <= cl + 0.05 && d.Lim.Clamps == 0, "true peak at " + r + " Hz, " + c.name + ", ceiling " + ceil + ": ITU " + itu.ToString("0.00") + " / reference " + refp.ToString("0.00") + " dBTP");
+        }
+    }
+    // headroom first (G2.2): at 50% volume a +6 dB boost fits under the ceiling and is never limited
+    {
+      const int r = 48000; var t = new double[4 * r]; for (int i = 0; i < 2 * r; i++) t[2 * i] = t[2 * i + 1] = 0.88 * Math.Sin(2 * Math.PI * 1000 * i / r);
+      var d = new Dsp(r); d.Apply(DspConfig.Parse("band peaking 1000 6 1;lim 1")); d.Volume = 0.5; run(d, t);
+      ok(d.Lim.Limited == 0, "50% volume + 6 dB boost: no sample limited (" + d.Lim.Limited + ")");
+    }
+    // no pumping (G2.3) and separation (G3.1, G3.2): a hot tone under a big boost is limited steadily; a tone in another band is untouched
+    {
+      const int r = 48000; int n = 3 * r; var t = new double[2 * n];
+      for (int i = 0; i < n; i++) t[2 * i] = t[2 * i + 1] = 0.5 * Math.Sin(2 * Math.PI * 60 * i / r) + 0.1 * Math.Sin(2 * Math.PI * 3000 * i / r);
+      var d = new Dsp(r); d.Apply(DspConfig.Parse("bass 12 120;lim 1")); var o = run(d, t);
+      double lo = 9, hi = -9, vlo = 9, vhi = -9;
+      for (int s0 = r; s0 + 4800 <= n; s0 += 4800) { // 4800 frames hold whole periods of both tones: no leakage between them
+        double b = 20 * Math.Log10(Amp(o, 60, r, s0, s0 + 4800)), v = 20 * Math.Log10(Amp(o, 3000, r, s0, s0 + 4800) / 0.1);
+        lo = Math.Min(lo, b); hi = Math.Max(hi, b); vlo = Math.Min(vlo, v); vhi = Math.Max(vhi, v);
+      }
+      ok(d.Lim.Limited > 0 && hi - lo < 0.1, "no pumping: limited 60 Hz level moves " + (hi - lo).ToString("0.000") + " dB");
+      ok(vlo > -0.1 && vhi < 0.1, "bass +12 dB leaves 3 kHz at " + vlo.ToString("0.000") + ".." + vhi.ToString("0.000") + " dB");
+      for (int i = 0; i < n; i++) t[2 * i] = t[2 * i + 1] = 0.1 * Math.Sin(2 * Math.PI * 60 * i / r) + 0.5 * Math.Sin(2 * Math.PI * 10000 * i / r);
+      d = new Dsp(r); d.Apply(DspConfig.Parse("treble 12 6000;lim 1")); o = run(d, t); vlo = 9; vhi = -9;
+      for (int s0 = r; s0 + 4800 <= n; s0 += 4800) { double v = 20 * Math.Log10(Amp(o, 60, r, s0, s0 + 4800) / 0.1); vlo = Math.Min(vlo, v); vhi = Math.Max(vhi, v); }
+      ok(d.Lim.Limited > 0 && vlo > -0.1 && vhi < 0.1, "treble +12 dB leaves 60 Hz at " + vlo.ToString("0.000") + ".." + vhi.ToString("0.000") + " dB");
+    }
+    // THD+N (G1.3): -0.5 dBFS 1 kHz through the processing path
+    {
+      const int r = 48000; var t = new double[4 * r]; for (int i = 0; i < 2 * r; i++) t[2 * i] = t[2 * i + 1] = Math.Pow(10, -0.5 / 20) * Math.Sin(2 * Math.PI * 1000 * i / r);
+      var d = new Dsp(r); d.Apply(DspConfig.Parse("pre 0.0001;lim 1")); var o = run(d, t);
+      double sn = 0, cs = 0; int a0 = r / 2, a1 = a0 + r;
+      for (int i = a0; i < a1; i++) { double w = 2 * Math.PI * 1000 * i / r; sn += o[2 * i] * Math.Sin(w); cs += o[2 * i] * Math.Cos(w); }
+      sn *= 2.0 / r; cs *= 2.0 / r; double res = 0, pw = 0;
+      for (int i = a0; i < a1; i++) { double w = 2 * Math.PI * 1000 * i / r, fit = sn * Math.Sin(w) + cs * Math.Cos(w); res += (o[2 * i] - fit) * (o[2 * i] - fit); pw += fit * fit; }
+      double thd = 10 * Math.Log10(res / pw); ok(thd < -120, "THD+N at -0.5 dBFS: " + thd.ToString("0.0") + " dB");
+    }
+    // toggles (G1.4, G1.2): a stage switched on mid-stream adds no click; switched off, the output is bit-exact again
+    {
+      const int r = 48000; int n = 2 * r; var t = new double[2 * n]; for (int i = 0; i < n; i++) t[2 * i] = t[2 * i + 1] = 0.3 * Math.Sin(2 * Math.PI * 997 * i / r);
+      var d = new Dsp(r); d.Apply(DspConfig.Parse("lim 1")); var o = (double[])t.Clone();
+      for (int at = 0; at < n; at += 1000) { if (at == r) d.Apply(DspConfig.Parse("bass 3 90;lim 1")); var sg = new double[2000]; Array.Copy(o, 2 * at, sg, 0, 2000); d.Process(sg, 1000); Array.Copy(sg, 0, o, 2 * at, 2000); }
+      double clean = 0.3 * Math.Pow(2 * Math.PI * 997 / r, 2), dd = 0;
+      for (int i = 2000; i < n; i++) dd = Math.Max(dd, Math.Abs(o[2 * i] - 2 * o[2 * i - 2] + o[2 * i - 4]));
+      ok(dd / clean <= 1.5, "bass on mid-stream: worst step " + (dd / clean).ToString("0.00") + "x a clean sine's");
+      var nz = new double[2 * 3 * r]; for (int i = 0; i < nz.Length; i++) nz[i] = (rnd.Next(-2097152, 2097152) << 8) / 2147483648.0;
+      foreach (var st in new[] { "pre 2", "pre -2", "band peaking 1000 3 1", "band peaking 1000 -3 1", "bass 3 90", "treble -3 9000", "bal 0.3", "width 1.5", "mono 1" }) {
+        d = new Dsp(r); d.Apply(DspConfig.Parse(st + ";lim 1")); o = (double[])nz.Clone(); bool back = true;
+        for (int at = 0; at < 3 * r; at += 1000) { if (at == r / 2) d.Apply(DspConfig.Parse("lim 1")); var sg = new double[2000]; Array.Copy(o, 2 * at, sg, 0, 2000); d.Process(sg, 1000); Array.Copy(sg, 0, o, 2 * at, 2000); if (at >= 2 * r && !d.Exact) back = false; }
+        int D = d.Latency; for (int i = 2 * 2 * r; i < o.Length && back; i++) if (o[i] != nz[i - 2 * D]) back = false;
+        ok(back, "'" + st + "' switched off: bit-exact again");
+      }
+    }
+    // robustness (G5.1, G5.2): NaN/Inf in gives finite output that recovers; denormal and silent tails cost no extra time
+    {
+      const int r = 48000; int n = 2 * r; var t = new double[2 * n]; for (int i = 0; i < 2 * n; i++) t[i] = rnd.NextDouble() * 0.6 - 0.3;
+      t[20000] = double.NaN; t[20001] = double.PositiveInfinity; t[30000] = double.NegativeInfinity;
+      var d = new Dsp(r); d.Apply(DspConfig.Parse("bass 6 90;band peaking 1000 3 1;lim 1")); var o = run(d, t); bool fin = true; double tail = 0;
+      foreach (var v in o) if (double.IsNaN(v) || double.IsInfinity(v)) fin = false;
+      for (int i = o.Length - 2000; i < o.Length; i++) tail = Math.Max(tail, Math.Abs(o[i]));
+      ok(fin && tail > 0.05 && d.Sanitized == 3, "NaN/Inf input: output finite and recovers (" + d.Sanitized + " samples replaced)");
+      Func<Dsp> mk = () => { var q = new Dsp(r); q.Apply(DspConfig.Parse("bass 6 90;treble 4 9000;band peaking 1000 3 1;band peaking 60 6 2;lim 1")); return q; };
+      var busy = mk(); var sil = mk(); run(busy, t); run(sil, t);
+      var blk = new double[2000]; var tiny = new double[2000]; for (int i = 0; i < 2000; i++) tiny[i] = 1e-310;
+      var sw = Stopwatch.StartNew(); for (int i = 0; i < 480; i++) { for (int j = 0; j < 2000; j++) blk[j] = rnd.NextDouble() * 0.2 - 0.1; busy.Process(blk, 1000); }
+      double tb = sw.Elapsed.TotalSeconds; sw.Restart();
+      for (int i = 0; i < 480; i++) { if (i % 2 == 0) Array.Copy(tiny, blk, 2000); else Array.Clear(blk, 0, 2000); sil.Process(blk, 1000); }
+      double ts = sw.Elapsed.TotalSeconds;
+      ok(ts < 2 * tb + 0.01, "denormal and silent tails take " + (ts / tb).ToString("0.00") + "x the time of music");
+    }
 
     // 4. reverb: left-only impulse rings on the left, the right stays silent (stereo IR, no cross-talk); finite output
     var dr = new Dsp(fs); dr.Apply(DspConfig.Parse("rev 1 0.3 0.5 1 0.5 0 0 1;lim 0"));
@@ -451,15 +537,48 @@ static class Wasapi {
       var sb = new System.Text.StringBuilder("pre 2;bass 4 90;treble 3 9000;lim 1;rev 1 1 0.5 0.8 1 0.3 0.4 0.5");
       for (int k = 0; k < 10; k++) sb.Append(";band peaking " + (31 << k) + " 3 1.41");
       db.Apply(DspConfig.Parse(sb.ToString()));
-      for (int w = 0; w < 2000 && db.Latency <= (int)Math.Round(hr * 0.005); w++) { db.Process(new double[2000], 1000); Thread.Sleep(5); }
+      for (int w = 0; w < 2000 && !db.ReverbReady; w++) { db.Process(new double[2000], 1000); Thread.Sleep(5); }
       var blk = new double[2 * 4800]; var sw = Stopwatch.StartNew(); int secs = 5;
       for (int i = 0; i < secs * hr / 4800; i++) { for (int j = 0; j < blk.Length; j++) blk[j] = rnd.NextDouble() * 0.2 - 0.1; db.Process(blk, 4800); }
       double rt = secs / sw.Elapsed.TotalSeconds;
-      ok(rt > 3 && db.Latency > (int)Math.Round(hr * 0.005), "worst case 192 kHz chain runs " + rt.ToString("0.0") + "x real time");
+      ok(rt > 3 && db.ReverbReady, "worst case 192 kHz chain runs " + rt.ToString("0.0") + "x real time");
     }
     return fails;
   }
-  static bool RevReady(Dsp d) { return d.Latency > (int)Math.Round(96000 * 0.005); }
+  static bool RevReady(Dsp d) { return d.ReverbReady; }
+  // amplitude of tone f in the left channel over frames [a, b)
+  static double Amp(double[] x, double f, int fs, int a, int b) { double s = 0, c = 0; for (int i = a; i < b; i++) { double w = 2 * Math.PI * f * i / fs; s += x[2 * i] * Math.Sin(w); c += x[2 * i] * Math.Cos(w); } return 2 * Math.Sqrt(s * s + c * c) / (b - a); }
+  // true peak in dBTP: the ITU-R BS.1770-4 Annex 2 4x meter, and a reference (Kaiser sinc, beta 12, +-64 taps, 64 points per sample) near its loudest spots
+  static readonly double[][] ITU4 = {
+    new[]{ 0.0017089843750, 0.0109863281250,-0.0196533203125, 0.0332031250000,-0.0594482421875, 0.1373291015625, 0.9721679687500,-0.1022949218750, 0.0476074218750,-0.0266113281250, 0.0148925781250,-0.0083007812500},
+    new[]{-0.0291748046875, 0.0292968750000,-0.0517578125000, 0.0891113281250,-0.1665039062500, 0.4650878906250, 0.7797851562500,-0.2003173828125, 0.1015625000000,-0.0582275390625, 0.0330810546875,-0.0189208984375},
+    new[]{-0.0189208984375, 0.0330810546875,-0.0582275390625, 0.1015625000000,-0.2003173828125, 0.7797851562500, 0.4650878906250,-0.1665039062500, 0.0891113281250,-0.0517578125000, 0.0292968750000,-0.0291748046875},
+    new[]{-0.0083007812500, 0.0148925781250,-0.0266113281250, 0.0476074218750,-0.1022949218750, 0.9721679687500, 0.1373291015625,-0.0594482421875, 0.0332031250000,-0.0196533203125, 0.0109863281250, 0.0017089843750}};
+  static double[] refWin;
+  static void TruePeak(double[] x, int skip, out double itu, out double reff) {
+    if (refWin == null) {
+      Func<double, double> i0 = v => { double s = 1, t = 1; for (int k = 1; k < 50; k++) { t *= (v / (2 * k)) * (v / (2 * k)); s += t; } return s; };
+      refWin = new double[64 * 64 + 1];
+      for (int i = 0; i <= 64 * 64; i++) { double d = i / 64.0, q = d / 64; refWin[i] = (i == 0 ? 1 : Math.Sin(Math.PI * d) / (Math.PI * d)) * i0(12 * Math.Sqrt(Math.Max(0, 1 - q * q))) / i0(12); }
+    }
+    int n = x.Length / 2; double mi = 1e-12, mr = 1e-12;
+    for (int ch = 0; ch < 2; ch++) {
+      var e = new double[n]; double mx = 0;
+      for (int i = Math.Max(11, skip); i < n; i++) { double m = 0; for (int p = 0; p < 4; p++) { double s = 0; for (int k = 0; k < 12; k++) s += ITU4[p][k] * x[2 * (i - k) + ch]; m = Math.Max(m, Math.Abs(s)); } e[i] = m; mx = Math.Max(mx, m); }
+      mi = Math.Max(mi, mx);
+      for (int i = skip, cnt = 0; i < n - 6 && cnt < 300; i++) {
+        if (e[i] <= mx * 0.9) continue;
+        int c0 = i - 6; // the ITU window ending at i peaks near sample i - 6
+        for (int sp = -64; sp <= 64; sp++) {
+          double v = 0;
+          for (int k = c0 - 64; k <= c0 + 65; k++) { if (k < 0 || k >= n) continue; int dq = Math.Abs(64 * (c0 - k) + sp); if (dq <= 64 * 64) v += x[2 * k + ch] * refWin[dq]; }
+          mr = Math.Max(mr, Math.Abs(v));
+        }
+        cnt++; i += 3;
+      }
+    }
+    itu = 20 * Math.Log10(mi); reff = 20 * Math.Log10(mr);
+  }
 
   // ---------- COM interop ----------
   [DllImport("avrt.dll", CharSet = CharSet.Unicode)] static extern IntPtr AvSetMmThreadCharacteristicsW(string task, ref int index);
