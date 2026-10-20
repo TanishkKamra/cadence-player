@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseFile } from 'music-metadata';
 import { Exclusive } from './exclusive.mjs';
@@ -96,7 +97,7 @@ function flush() {
   if (pending.size) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, 2000); }
 }
 const STORES = new Set(['settings', 'playlists', 'stats', 'state', 'streams', 'bookmarks']);
-ipcMain.handle('store:get', (e, name) => STORES.has(name) ? readJSON(name + '.json', null) : null);
+ipcMain.handle('store:get', (e, name) => !STORES.has(name) ? null : pending.has(name + '.json') ? pending.get(name + '.json') : readJSON(name + '.json', null)); // a write still waiting for its flush is the newest copy (a reload right after a change)
 on('store:set', (e, name, data) => { if (STORES.has(name) && SHAPE[name](data)) writeJSON(name + '.json', data); });
 
 // ---------- window ----------
@@ -115,14 +116,25 @@ function fitBounds(b, minW = 960, minH = 620) {
   return { width: cw, height: ch, x: Math.min(Math.max(x, wa.x), wa.x + wa.width - cw), y: Math.min(Math.max(y, wa.y), wa.y + wa.height - ch) };
 }
 let fsSaved = null, mini = false, normal = null, maxed = false, crashes = [], unresponsiveTimer;
+// native window backdrop (Windows 11 22H2+): mica = wallpaper-tinted, acrylic = the desktop shows through, frosted
+const MATERIAL_OK = process.platform === 'win32' && +(os.release().split('.')[2] || 0) >= 22621;
+const material = m => MATERIAL_OK && (m === 'mica' || m === 'acrylic') ? m : 'none';
+function applyMaterial(m, bg) {
+  m = material(m);
+  try { win.setBackgroundMaterial(m); } catch { m = 'none'; win.setBackgroundMaterial?.('none'); } // refused: a plain opaque window
+  win.setBackgroundColor(m === 'none' ? bg : '#00000000'); // the page must be see-through for the backdrop to show
+  send('win:material', m);
+  return m;
+}
 function createWindow() {
   const sb = readJSON('window.json', {}), wt0 = readJSON('window-theme.json', {});
   const b = fitBounds(sb); // only geometry is taken from window.json: no other BrowserWindow options can be injected
-  const wt = { bg: /^#[0-9a-f]{6}$/i.test(wt0.bg) ? wt0.bg : '#050505', symbolColor: /^#[0-9a-f]{6}$/i.test(wt0.symbolColor) ? wt0.symbolColor : '#e8e8ee' }; // last theme: no dark flash in light mode
+  const wt = { bg: /^#[0-9a-f]{6}$/i.test(wt0.bg) ? wt0.bg : '#050505', symbolColor: /^#[0-9a-f]{6}$/i.test(wt0.symbolColor) ? wt0.symbolColor : '#e8e8ee', material: material(wt0.material) }; // last theme: no dark flash in light mode
   maxed = sb.maximized === true; normal = b;
   win = new BrowserWindow({
     ...b, minWidth: 960, minHeight: 620, show: false,
-    backgroundColor: wt.bg, title: 'Cadence', icon: path.join(ROOT, 'build', 'icon.png'),
+    backgroundColor: wt.material === 'none' ? wt.bg : '#00000000', ...(wt.material !== 'none' ? { backgroundMaterial: wt.material } : {}),
+    title: 'Cadence', icon: path.join(ROOT, 'build', 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: wt.symbolColor, height: 38 },
     webPreferences: { preload: path.join(ROOT, 'preload.cjs'), contextIsolation: true, sandbox: true, additionalArguments: /beta/i.test(app.getName()) ? ['--cadence-beta'] : [] },
@@ -133,6 +145,10 @@ function createWindow() {
   wc.setWindowOpenHandler(() => ({ action: 'deny' }));
   const lock = (e, url) => { if (!url.startsWith('app://ui/')) e.preventDefault(); };
   wc.on('will-navigate', lock); wc.on('will-redirect', lock);
+  // the default menu's zoom-in accelerator is Ctrl+Shift+=; also take plain Ctrl+= and numpad +
+  wc.on('before-input-event', (e, i) => {
+    if (i.type === 'keyDown' && (i.control || i.meta) && !i.alt && (i.key === '=' || i.key === '+')) { e.preventDefault(); wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5)); }
+  });
   wc.on('render-process-gone', (e, d) => {
     killDecoders(); releaseAwake(); flush();
     if (d.reason === 'clean-exit' || win.isDestroyed()) return;
@@ -943,8 +959,10 @@ ipcMain.handle('autoeq:index', async () => {
   fsp.writeFile(key, JSON.stringify({ at: Date.now(), list })).catch(() => {});
   return list;
 });
+// a results/ path from the index: no '..' segment once decoded, with / or \ (URLs treat both as separators)
+const aeqPathOk = p => { try { return !decodeURIComponent(p).split(/[\\/]/).includes('..'); } catch { return false; } };
 ipcMain.handle('autoeq:get', async (e, item) => {
-  if (!isObj(item) || !str(item.path) || !str(item.name) || item.path.split('/').includes('..')) throw new Error('Profile not found');
+  if (!isObj(item) || !str(item.path) || !str(item.name) || !aeqPathOk(item.path)) throw new Error('Profile not found');
   const r = await net.fetch(AUTOEQ + item.path + '/' + encodeURIComponent(item.name + ' ParametricEQ.txt'));
   if (!r.ok) throw new Error('Profile not found');
   const text = await r.text();
@@ -1021,7 +1039,7 @@ on('win:theme', (e, o) => {
   if (!isObj(o)) return;
   const { bg } = o, symbolColor = /^#[0-9a-f]{6}$/i.test(o.symbolColor || '') ? o.symbolColor : '#e8e8ee';
   win?.setTitleBarOverlay?.({ symbolColor });
-  if (/^#[0-9a-f]{6}$/i.test(bg || '')) { win?.setBackgroundColor(bg); writeJSON('window-theme.json', { bg, symbolColor }); }
+  if (win && /^#[0-9a-f]{6}$/i.test(bg || '')) writeJSON('window-theme.json', { bg, symbolColor, material: applyMaterial(o.material, bg) });
 });
 on('shell:open', (e, url) => { if (typeof url === 'string' && url.length < 2048 && /^https:\/\//.test(url)) shell.openExternal(url); });
 

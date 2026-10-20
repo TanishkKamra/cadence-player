@@ -1,11 +1,12 @@
-// Settings screen (grouped like settings tree) with search.
+// Settings screen with search.
 import { h, icon, signed } from './util.js';
 import { S, set, engine, saveSettings, saveStats, skipFadeSec, allowXf, DEFAULTS } from './core.js';
 import { toggle, rangeInput, toast, confirm, dropdown } from './ui.js';
 import { render, crossfade } from './views.js';
 import { clearLyricsCache } from './lyricsview.js';
 import { applyDevicePreset } from './eq.js';
-import { applyTheme, applyAccentFromArt, importPhone, exportBackup, importBackup, reindex, fetchArtistImages, syncEngine, syncMediaKeys } from './app.js';
+import { DESIGNS } from './designs/index.js';
+import { applyTheme, applyAccentFromArt, switchDesign, importPhone, exportBackup, importBackup, reindex, fetchArtistImages, syncEngine, syncMediaKeys } from './app.js';
 import { downloadArt } from './actions.js';
 
 let query = '';
@@ -81,7 +82,7 @@ export function settingsView() {
       row('Don’t add duplicates to playlists', null, sw('noDuplicates')),
       row('Visible categories', set.hiddenCats.length ? `${set.hiddenCats.length} hidden. Right-click a category in the sidebar to hide it.` : 'Right-click a category in the sidebar to hide it.', btn('Show all', () => { set.hiddenCats = []; saveSettings(); render(); }))),
     group('Queue and shuffle',
-      row('Start playing the queue', 'queue: queued songs play, then the current list continues.', sel('queueStart', [['after', 'After the current song'], ['now', 'Immediately']])),
+      row('Start playing the queue', 'Queued songs play, then the current list continues.', sel('queueStart', [['after', 'After the current song'], ['now', 'Immediately']])),
       row('When the queue ends', null, sel('queueEnd', [['return', 'Return to the previous list'], ['stay', 'Repeat the queue']])),
       row('Shuffle mode', 'For lists made of several albums or folders.', sel('shuffleMode', [['songsCats', 'Shuffle songs and categories'], ['cats', 'Shuffle categories (keep album order)'], ['songs', 'Shuffle songs']])),
       row('Shuffle randomization', '“Less random” favours songs you have played less.', sel('shuffleRandom', [['full', 'Full random'], ['less', 'Less random']])),
@@ -98,12 +99,16 @@ export function settingsView() {
     group('Audio',
       row('Output device', null, devSel),
       row('Exclusive output (bit-perfect)', "WASAPI exclusive at each file's own sample rate and bit depth, bypassing the Windows mixer. EQ, tone, balance, reverb, limiter and ReplayGain run in 64-bit with dither; the volume drives the DAC's own hardware volume, with headroom for EQ boosts made up on the DAC. All flat = bit-perfect at any volume. Tempo, crossfade and visualizers are off. Other apps can't use the device meanwhile.", sw('exclusive', v => { dispatchEvent(new Event('cadence:xo-reset')); engine.xoFallback = false; engine.setExclusive(v); })),
-      row('Output sample rate', 'Auto follows the device. Everything is resampled once in ffmpeg with a long windowed-sinc filter.', sel('sampleRate', [[0, 'Auto (device)'], [44100, '44.1 kHz'], [48000, '48 kHz'], [88200, '88.2 kHz'], [96000, '96 kHz'], [176400, '176.4 kHz'], [192000, '192 kHz']], () => engine.setOutput(set.device, set.sampleRate))),
+      row('Output sample rate', 'Auto follows the device. Everything is resampled once in ffmpeg with the SoX very-high-quality resampler.', sel('sampleRate', [[0, 'Auto (device)'], [44100, '44.1 kHz'], [48000, '48 kHz'], [88200, '88.2 kHz'], [96000, '96 kHz'], [176400, '176.4 kHz'], [192000, '192 kHz']], () => engine.setOutput(set.device, set.sampleRate))),
       row('Replay Gain', null, sel('rgMode', [['off', "Don't apply"], ['track', 'Track gain'], ['album', 'Album gain']], applyRg)),
       row('Prevent clipping using peak', null, sw('preventClip', applyRg)),
       row('RG preamp', null, slider('rgPreamp', -15, 15, 0.5, v => (v > 0 ? '+' : '') + v + ' dB', applyRg)),
       row('Preamp for songs without RG', null, slider('noRgPreamp', -15, 15, 0.5, v => (v > 0 ? '+' : '') + v + ' dB', applyRg)),
-      row('Limiter', 'Catches peaks after EQ and preamp boosts.', sw('limiter', v => engine.setLimiter(v)))),
+      row('Limiter', 'Holds the true peak (ITU BS.1770-4) under the ceiling after EQ and preamp boosts. Boosts spend volume headroom first; only the boosted band is pulled back, so nothing else ducks.', sw('limiter', v => engine.setLimiter(v))),
+      row('Limiter ceiling', '−1.0 dBTP leaves room for lossy encoders and cheap DACs; −0.3 dBTP is louder.', sel('ceiling', [[-1, '−1.0 dBTP'], [-0.3, '−0.3 dBTP']], v => engine.setLimiter(set.limiter, +v))),
+      row('DAC overload guard', 'Keeps the true-peak ceiling on even when every effect is off. Off: a flat chain stays bit-perfect.', sw('guard', v => engine.setLimiter(set.limiter, undefined, v))),
+      row('Crossfeed (headphones)', "Lets some of each channel's bass reach the other ear, as from speakers, so hard-panned mixes tire you less. Mono content is untouched.", sel('crossfeed', [['off', 'Off'], ['bs2b', 'Default (700 Hz, 4.5 dB)'], ['cmoy', 'Chu Moy (700 Hz, 6 dB)'], ['meier', 'Jan Meier (650 Hz, 9.5 dB)']], v => engine.setCrossfeed(v))),
+      row('Virtual speakers (headphones)', "Plays the music as two speakers at 45 degrees in a room would reach your ears, measured on a dummy head (SADIE II, University of York). Tonal balance and loudness are kept; how far out of your head it sounds depends on how close your ears are to the dummy's. Adds about 11 ms of delay.", sw('speakers', v => engine.setSpeakers(v)))),
     group('Headphones and devices',
       row('Pause when headphones disconnect', 'Pauses when the active output device disappears.', sw('pauseOnDisconnect')),
       row('Resume when headphones connect', null, sw('resumeOnConnect')),
@@ -114,8 +119,11 @@ export function settingsView() {
       row('Lyrics time offset', 'Positive values make lyrics appear later.', slider('lyricsOffset', -5, 5, 0.1, v => signed(v, 1, ' s'))),
       row('Lyrics search URL', 'Used by “Search the web”. %ARTIST% and %TITLE% are replaced.', (() => { const i = h('input', { type: 'text', class: 'set-text', value: set.lyricsSearchUrl }); i.addEventListener('change', () => { if (/^https:\/\//.test(i.value)) { set.lyricsSearchUrl = i.value; saveSettings(); } else toast('Use an https:// address', true); }); return i; })())),
     group('Look and feel',
+      row('Design', 'The whole look of Cadence. Switching reloads the window; the song keeps playing from where it was.', sel('design', Object.entries(DESIGNS).map(([k, d]) => [k, d.label]), switchDesign)),
+      set.design === 'lit-chassis' ? row('Live visuals', 'Phosphor rings and the dot-matrix seek strip animate while audio plays (capped at 60 fps). Off keeps them still.', sw('liveVisuals', () => document.dispatchEvent(new Event('fc:live')))) : null,
       row('Theme', null, sel('theme', [['dark', 'Dark'], ['black', 'Black (OLED)'], ['light', 'Light'], ['auto', 'Follow Windows']], () => crossfade(applyTheme))),
       row('Animations', null, sel('animations', [['normal', 'Normal'], ['fast', 'Fast'], ['off', 'Off']], applyTheme)),
+      row('Window material', 'Windows 11 backdrop behind the glass: Mica tints with your wallpaper, Acrylic lets the desktop show through.', sel('windowMaterial', [['none', 'None'], ['mica', 'Mica'], ['acrylic', 'Acrylic']], () => crossfade(applyTheme))),
       row('Album art animation', 'Slide the cover on track change.', sw('artAnim', applyTheme)),
       row('Scroll long titles', null, sw('marquee', applyTheme)),
       row('<<< >>> buttons', 'Jump between albums/folders, or seek ±10 seconds.', sel('proButtons', [['category', 'Previous / next album'], ['seek', '−10 / +10 seconds']])),

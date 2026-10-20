@@ -1,18 +1,21 @@
 // 64-bit (double) DSP for exclusive output: the same chain as the Web Audio graph in renderer/engine.js, in the same order:
-// stream gain (ReplayGain) -> width/mono -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> volume -> limiter.
-// When every stage is neutral the samples pass through untouched (only delayed), so the output stays bit-perfect.
+// stream gain (ReplayGain) -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> volume -> reverb -> virtual speakers -> limiter.
+// The filters are linear, so they run as two chains: every cut first, then every boost, each boost kept as its own part for the
+// give-back limiter. When every stage is neutral the samples pass through untouched (only delayed), so the output stays bit-perfect.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 sealed class DspConfig {
-  public double Pre, Bass, BassF = 90, Treble, TrebleF = 9000, Bal, Width = 1;
-  public bool Mono, Lim = true, RevOn;
+  public double Pre, Bass, BassF = 90, Treble, TrebleF = 9000, Bal, Width = 1, Ceil = -1;
+  public bool Mono, Lim = true, RevOn, Guard, Xf, Spk;
+  public double XfF = 700, XfDb = 4.5; // crossfeed corner and how far below the direct sound the crossed bass sits
   public double Size, Damp, Filter, Fade, PreDelay, PreDelayMix, Mix;
   public readonly List<Band> Bands = new List<Band>();
   public struct Band { public string Type; public double Freq, Gain, Q; }
 
-  // "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;rev 0 s d f fa pd pdm m;lim 1"
+  // "pre 5.1;band peaking 131 5.2 0.97;bass 0 90;treble 0 9000;bal 0;width 1;mono 0;xfeed 0 700 4.5;spk 0;rev 0 s d f fa pd pdm m;lim 1;ceil -1;guard 0"
   public static DspConfig Parse(string text) {
     var c = new DspConfig();
     foreach (var part in text.Split(';')) {
@@ -27,7 +30,11 @@ sealed class DspConfig {
         case "bal": c.Bal = Clamp(n(1), -1, 1); break;
         case "width": c.Width = Clamp(n(1), 0, 3); break;
         case "mono": c.Mono = n(1) != 0; break;
+        case "xfeed": c.Xf = n(1) != 0; c.XfF = Clamp(n(2), 300, 2000); c.XfDb = Clamp(n(3), 1, 15); break;
+        case "spk": c.Spk = n(1) != 0; break;
         case "lim": c.Lim = n(1) != 0; break;
+        case "ceil": c.Ceil = Clamp(n(1), -6, 0); break;   // true-peak ceiling, dBTP
+        case "guard": c.Guard = n(1) != 0; break;         // true-peak stage on even when every other stage is neutral
         case "rev":
           c.RevOn = n(1) != 0; c.Size = Clamp(n(2), 0, 1); c.Damp = Clamp(n(3), 0, 1); c.Filter = Clamp(n(4), 0, 1); c.Fade = Clamp(n(5), 0, 1);
           c.PreDelay = Clamp(n(6), 0, 1); c.PreDelayMix = Clamp(n(7), 0, 1); c.Mix = Clamp(n(8), 0, 1); break;
@@ -40,7 +47,7 @@ sealed class DspConfig {
   // stages that change the sound (a lowpass/highpass/notch/... band changes it at any gain)
   public bool Neutral {
     get {
-      if (Pre != 0 || Bass != 0 || Treble != 0 || Bal != 0 || Width != 1 || Mono || RevOn) return false;
+      if (Pre != 0 || Bass != 0 || Treble != 0 || Bal != 0 || Width != 1 || Mono || Xf || Spk || RevOn) return false;
       foreach (var b in Bands) if (!(b.Gain == 0 && (b.Type == "peaking" || b.Type == "lowshelf" || b.Type == "highshelf"))) return false;
       return true;
     }
@@ -52,7 +59,8 @@ sealed class Biquad {
   public double b0 = 1, b1, b2, a1, a2;
   double t0 = 1, t1, t2, t3, t4, d0, d1, d2, d3, d4; int n;
   double zl1, zl2, zr1, zr2;
-  public bool Identity { get { return n == 0 && b0 == 1 && b1 == 0 && b2 == 0 && a1 == 0 && a2 == 0; } }
+  // identity coefficients and no state left: running it would change nothing
+  public bool Identity { get { return n == 0 && b0 == 1 && b1 == 0 && b2 == 0 && a1 == 0 && a2 == 0 && zl1 == 0 && zl2 == 0 && zr1 == 0 && zr2 == 0; } }
 
   public static double[] Coef(string type, double fs, double freq, double gainDb, double q) {
     if (gainDb == 0 && (type == "peaking" || type == "lowshelf" || type == "highshelf")) return new double[] { 1, 0, 0, 0, 0 }; // exact identity
@@ -107,52 +115,76 @@ struct Smooth {
 }
 
 sealed class Dsp {
+  const int BLK = 256, SLOTS = 3 + 64; // give-back slots: 0 preamp, 1 bass, 2 treble, 3.. EQ bands
   public readonly int Rate;
   public DspConfig Cfg = new DspConfig();
-  readonly List<Biquad> bands = new List<Biquad>();
-  readonly Biquad bass = new Biquad(), treble = new Biquad();
-  Smooth pre, bal, vol, stream;
+  // every gain filter has two instances: one in the cut chain, one in the boost chain. A band that boosts runs in the boost chain
+  // (its cut twin glides to identity), so a band crossing 0 dB moves over without a click
+  readonly List<Biquad> cutQ = new List<Biquad>(), boostQ = new List<Biquad>();
+  readonly Biquad bassC = new Biquad(), bassB = new Biquad(), trebC = new Biquad(), trebB = new Biquad();
+  Smooth pre, bal, vol, stream, xg; double xa, xlp; // xg: crossfeed amount g, xlp: its lowpass state
   public double Width = 1; public bool Mono;
   readonly Limiter lim;
-  readonly double[] dly; int dp; // plain delay with the limiter's latency, used when the limiter is bypassed
+  readonly double[] s0 = new double[2 * BLK], acc = new double[2 * BLK], tmp = new double[2 * BLK], gp = new double[BLK];
+  readonly double[][] dk = new double[SLOTS][]; readonly bool[] live = new bool[SLOTS];
   Reverb rev; Smooth wet, dry;
-  public int Latency { get { return lim.L + (rev != null ? rev.B : 0); } }
+  Speakers spk, spkKeep; volatile Speakers spkNew; volatile bool spkDone; bool spkBusy; // spkKeep: built once, kept for the next toggle
+  public int Latency { get { return lim.L + (rev != null ? rev.B : 0) + (spk != null ? spk.B : 0); } }
+  public bool SpeakersReady { get { return spk != null; } }
+  public bool ReverbReady { get { return rev != null; } }
+  public Limiter Lim { get { return lim; } }
+  // the last Process call wrote the delayed input unchanged (no dither needed)
+  public bool Exact { get; private set; }
 
   public Dsp(int rate) {
     Rate = rate;
     pre.Init(1, 0.02, rate); bal.Init(0, 0.02, rate); vol.Init(1, 0.015, rate); stream.Init(1, 0.02, rate);
-    wet.Init(0, 0.03, rate); dry.Init(1, 0.03, rate);
-    lim = new Limiter(rate);
-    dly = new double[lim.L * 2];
+    wet.Init(0, 0.03, rate); dry.Init(1, 0.03, rate); xg.Init(0, 0.03, rate);
+    lim = new Limiter(rate, SLOTS);
+    for (int k = 0; k < SLOTS; k++) dk[k] = new double[2 * BLK];
   }
   public double StreamGain { set { stream.T = value; } }
   public double Volume { set { vol.T = value; } }
+  bool fresh = true;
+  public long Sanitized; // non-finite input samples replaced by 0
 
   // nothing in flight and every stage neutral: output equals input exactly
   public bool Neutral {
     get {
-      if (!Cfg.Neutral || rev != null || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V != 1 || stream.V != 1) return false;
-      foreach (var b in bands) if (!b.Identity) return false;
-      return bass.Identity && treble.Identity;
+      if (!Cfg.Neutral || rev != null || spk != null || !pre.Settled || !bal.Settled || !vol.Settled || !stream.Settled || vol.V != 1 || stream.V != 1 || pre.V != 1 || !xg.Settled || xg.V != 0) return false;
+      foreach (var b in cutQ) if (!b.Identity) return false;
+      foreach (var b in boostQ) if (!b.Identity) return false;
+      return bassC.Identity && bassB.Identity && trebC.Identity && trebB.Identity;
     }
   }
+
+  static readonly double[] ID = { 1, 0, 0, 0, 0 };
+  static bool Boosts(string type, double gain) { return gain > 0 && (type == "peaking" || type == "lowshelf" || type == "highshelf"); }
+  static void Pair(Biquad c, Biquad b, double[] k, bool boost, int glide) { c.Target(boost ? ID : k, glide); b.Target(boost ? k : ID, glide); }
 
   public void Apply(DspConfig c) {
     Cfg = c;
     int glide = (int)(Rate * 0.02);
-    while (bands.Count < c.Bands.Count) bands.Add(new Biquad());
-    if (bands.Count > c.Bands.Count) bands.RemoveRange(c.Bands.Count, bands.Count - c.Bands.Count);
-    for (int i = 0; i < c.Bands.Count; i++) { var b = c.Bands[i]; bands[i].Target(Biquad.Coef(b.Type, Rate, b.Freq, b.Gain, b.Q), glide); }
-    bass.Target(Biquad.Coef("lowshelf", Rate, c.BassF, c.Bass, 0.7), glide);
-    treble.Target(Biquad.Coef("highshelf", Rate, c.TrebleF, c.Treble, 0.7), glide);
+    while (cutQ.Count < c.Bands.Count) { cutQ.Add(new Biquad()); boostQ.Add(new Biquad()); }
+    for (int i = 0; i < cutQ.Count; i++) {
+      if (i >= c.Bands.Count) { Pair(cutQ[i], boostQ[i], ID, false, glide); continue; } // removed bands glide out, pruned once flat
+      var b = c.Bands[i]; Pair(cutQ[i], boostQ[i], Biquad.Coef(b.Type, Rate, b.Freq, b.Gain, b.Q), Boosts(b.Type, b.Gain), glide);
+    }
+    Pair(bassC, bassB, Biquad.Coef("lowshelf", Rate, c.BassF, c.Bass, 0.7), c.Bass > 0, glide);
+    Pair(trebC, trebB, Biquad.Coef("highshelf", Rate, c.TrebleF, c.Treble, 0.7), c.Treble > 0, glide);
     pre.T = Math.Pow(10, c.Pre / 20); bal.T = c.Bal; Width = c.Width; Mono = c.Mono;
+    lim.Ceil = Math.Pow(10, c.Ceil / 20);
+    xg.T = c.Xf ? 1 / (1 + Math.Pow(10, c.XfDb / 20)) : 0; xa = 1 - Math.Exp(-2 * Math.PI * c.XfF / Rate);
     if (!c.RevOn) rev = null; // shortcut: toggling reverb shifts the output by its block latency (one short gap or skip)
     else if (rev != null && rev.Same(c)) rev.Params(c);
     else Build();
     wet.T = c.RevOn ? c.Mix : 0; dry.T = 1 - (c.RevOn ? c.Mix : 0) * 0.45;
-    var boost = new double[Limiter.CENTERS.Length];
-    for (int k = 0; k < boost.Length; k++) boost[k] = Math.Pow(10, (c.Pre + ResponseDb(Limiter.CENTERS[k])) / 20);
-    lim.SetBoost(boost);
+    if (!c.Spk) spk = null; // shortcut (as for reverb): toggling shifts the output by B frames
+    else if (spk == null && spkKeep != null) { spkKeep.Reset(); spk = spkKeep; }
+    else if (spk == null && !spkBusy) { // resampling the responses takes a moment at other rates: on a pool thread
+      spkBusy = true; int rate = Rate;
+      System.Threading.ThreadPool.QueueUserWorkItem(_ => { var h = Speakers.For(rate); spkNew = h != null ? new Speakers(rate, h) : null; spkDone = true; });
+    }
   }
 
   // EQ + tone magnitude (dB) at f, from the target coefficients
@@ -187,147 +219,295 @@ sealed class Dsp {
   }
 
   public void Reset() {
-    foreach (var b in bands) b.Reset(); bass.Reset(); treble.Reset();
-    lim.Reset(); Array.Clear(dly, 0, dly.Length); dp = 0;
+    foreach (var b in cutQ) b.Reset(); foreach (var b in boostQ) b.Reset();
+    bassC.Reset(); bassB.Reset(); trebC.Reset(); trebB.Reset();
+    lim.Reset(); fresh = true; xlp = 0;
     if (rev != null) rev.Reset();
+    if (spk != null) spk.Reset();
   }
 
   // x: interleaved stereo, in place
   public void Process(double[] x, int frames) {
     if (building) Swap();
+    if (spkDone) { spkDone = false; spkBusy = false; spkKeep = spkNew; if (Cfg.Spk && spkKeep != null) spk = spkKeep; }
+    // a fresh stream starts at its settings, not gliding in from unity (a gliding volume would be limited for a moment)
+    if (fresh) { fresh = false; pre.V = pre.T; bal.V = bal.T; vol.V = vol.T; stream.V = stream.T; xg.V = xg.T; }
+    // NaN/Inf from a broken decoder would poison every filter state for good: replace with silence
+    for (int i = 0; i < 2 * frames; i++) if (x[i] - x[i] != 0) { x[i] = 0; Sanitized++; }
+    bool exact = true;
+    for (int at = 0; at < frames; at += BLK) exact &= Block(x, at, Math.Min(BLK, frames - at));
+    Exact = exact;
+    while (cutQ.Count > Cfg.Bands.Count && cutQ[cutQ.Count - 1].Identity && boostQ[boostQ.Count - 1].Identity) { cutQ.RemoveAt(cutQ.Count - 1); boostQ.RemoveAt(boostQ.Count - 1); }
+  }
+
+  // one link of the boost chain: d = B(acc) - acc, acc = B(acc)
+  void Boost(Biquad b, int slot, int n) {
+    if (b.Identity) return;
+    Array.Copy(acc, tmp, 2 * n); b.Run(tmp, n);
+    var d = dk[slot]; for (int j = 0; j < 2 * n; j++) d[j] = tmp[j] - acc[j];
+    Array.Copy(tmp, acc, 2 * n); live[slot] = true;
+  }
+
+  bool Block(double[] x, int at, int n) {
     bool neutral = Neutral;
+    Array.Copy(x, 2 * at, s0, 0, 2 * n);
+    Array.Clear(live, 0, SLOTS);
     if (!neutral) {
-      for (int i = 0, j = 0; i < frames; i++, j += 2) {
-        double g = stream.Next() * pre.Next(), l = x[j] * g, r = x[j + 1] * g;
+      // stream gain and the cutting part of the preamp go into the base signal; a preamp boost is give-back slot 0
+      bool preUp = false, xf = !xg.Settled || xg.V != 0;
+      for (int i = 0, j = 0; i < n; i++, j += 2) {
+        double p = pre.Next(), g = stream.Next() * (p < 1 ? p : 1), l = s0[j] * g, r = s0[j + 1] * g;
         if (Width != 1 || Mono) { double m = (l + r) * 0.5, sd = (l - r) * 0.5 * (Mono ? 0 : Width); l = m + sd; r = m - sd; }
-        x[j] = l; x[j + 1] = r;
+      // crossfeed: the side signal loses 2g of its low end (S - 2g LP(S)), so a hard-panned bass reaches the far ear (1-g : g),
+      // the mid signal (and so a mono sum) stays exactly as it was. |1 - 2g LP| <= 1: it never adds level
+        if (xf) { double m = (l + r) * 0.5, sd = (l - r) * 0.5; xlp += xa * (sd - xlp); sd -= 2 * xg.Next() * xlp; l = m + sd; r = m - sd; }
+        s0[j] = l; s0[j + 1] = r; gp[i] = p > 1 ? p : 1; if (p > 1) preUp = true;
       }
-      foreach (var b in bands) if (!b.Identity) b.Run(x, frames);
-      if (!bass.Identity) bass.Run(x, frames);
-      if (!treble.Identity) treble.Run(x, frames);
-      for (int i = 0, j = 0; i < frames; i++, j += 2) {
-        double p = bal.Next();
-        if (p == 0) continue;
+      if (!xf || Math.Abs(xlp) < 1e-300) xlp = 0;
+      // cut chain: the signal with every boost taken out
+      foreach (var b in cutQ) if (!b.Identity) b.Run(s0, n);
+      if (!bassC.Identity) bassC.Run(s0, n);
+      if (!trebC.Identity) trebC.Run(s0, n);
+      // boost chain, telescoped: s0 + d_pre + d_1 + ... is exactly the EQ that was asked for, and each d holds only what its boost adds
+      Array.Copy(s0, acc, 2 * n);
+      if (preUp) { var d = dk[0]; for (int i = 0, j = 0; i < n; i++, j += 2) { double k = gp[i] - 1; d[j] = acc[j] * k; d[j + 1] = acc[j + 1] * k; acc[j] += d[j]; acc[j + 1] += d[j + 1]; } live[0] = true; }
+      for (int i = 0; i < boostQ.Count; i++) Boost(boostQ[i], 3 + i, n);
+      Boost(bassB, 1, n); Boost(trebB, 2, n);
+      // balance and volume are memoryless and linear: applied to every part exactly
+      for (int i = 0, j = 0; i < n; i++, j += 2) {
+        double p = bal.Next(), v = vol.Next();
+        if (p == 0) { Scale(j, v); continue; }
         // StereoPannerNode, equal power, stereo input
-        double l = x[j], r = x[j + 1];
-        if (p <= 0) { double a = (p + 1) * Math.PI / 2; x[j] = l + r * Math.Cos(a); x[j + 1] = r * Math.Sin(a); }
-        else { double a = p * Math.PI / 2; x[j] = l * Math.Cos(a); x[j + 1] = r + l * Math.Sin(a); }
+        if (p <= 0) { double a = (p + 1) * Math.PI / 2; Pan(j, v, v * Math.Cos(a), v * Math.Sin(a), true); }
+        else { double a = p * Math.PI / 2; Pan(j, v, v * Math.Cos(a), v * Math.Sin(a), false); }
       }
-      if (rev != null) rev.Run(x, frames, ref wet, ref dry);
-      for (int i = 0, j = 0; i < frames; i++, j += 2) { double v = vol.Next(); x[j] *= v; x[j + 1] *= v; }
+      // reverb: the wet part cannot be split into boosts, so with reverb on everything goes to the base signal
+      // and so do the virtual speakers
+      if (rev != null || spk != null) {
+        for (int k = 0; k < SLOTS; k++) if (live[k]) { var d = dk[k]; for (int j = 0; j < 2 * n; j++) s0[j] += d[j]; live[k] = false; }
+        if (rev != null) rev.Run(s0, n, ref wet, ref dry);
+        if (spk != null) spk.Run(s0, n);
+      }
     }
-    // the limiter always runs (when on) so it is primed the moment a boost appears; neutral output takes the plain delay
-    if (Cfg.Lim) lim.Process(x, frames, neutral ? null : x, dly, ref dp);
-    else for (int i = 0, j = 0; i < frames; i++, j += 2) {
-      double l = dly[dp], r = dly[dp + 1]; dly[dp] = x[j]; dly[dp + 1] = x[j + 1]; x[j] = l; x[j + 1] = r;
-      dp += 2; if (dp >= dly.Length) dp = 0;
-    }
+    bool on = !neutral && Cfg.Lim;
+    return lim.Process(s0, dk, live, n, x, at, on, on || Cfg.Guard) && neutral;
+  }
+  void Scale(int j, double v) {
+    if (v == 1) return;
+    s0[j] *= v; s0[j + 1] *= v;
+    for (int k = 0; k < SLOTS; k++) if (live[k]) { dk[k][j] *= v; dk[k][j + 1] *= v; }
+  }
+  // left (p <= 0): L' = v(l + r cos), R' = v r sin; right: L' = v l cos, R' = v(r + l sin)
+  void Pan(int j, double v, double vc, double vs, bool left) {
+    Pan1(s0, j, v, vc, vs, left);
+    for (int k = 0; k < SLOTS; k++) if (live[k]) Pan1(dk[k], j, v, vc, vs, left);
+  }
+  static void Pan1(double[] a, int j, double v, double vc, double vs, bool left) {
+    double l = a[j], r = a[j + 1];
+    if (left) { a[j] = v * l + vc * r; a[j + 1] = vs * r; } else { a[j] = vc * l; a[j + 1] = v * r + vs * l; }
   }
 }
 
-// Port of renderer/worklet.js LimiterProcessor: 10 octave bands (LR4 crossovers that sum back to the input), 5 ms look-ahead,
-// boosted bands give back their own boost first, a broadband stage catches the rest. Ceiling -0.3 dBFS.
+// Boost give-back limiter with true-peak detection. Input: the unboosted signal s0 and one part d_k per active boost
+// (preamp, bass, treble, EQ bands). The output is gB * (s0 + sum a_k d_k):
+//  stage A: when the requested sum would pass the ceiling (at a sample or between samples), the boosts that push in that
+//           direction give back their boost (a_k < 1, never below the unboosted level), in proportion to their share.
+//           Nothing that is not boosted is touched, so a bass boost never ducks vocals or cymbals.
+//  stage B: broadband, on the actual output: catches what stage A cannot (an unboosted signal that is itself over).
+// Both stages: min-hold over the look-ahead then a moving average of the same length, so the gain at every peak is at or
+// below what that peak needs (no exponential attack that relies on a clipper). Inter-sample peaks: a 4x grid of
+// Kaiser-windowed sinc (128 taps) refined by a parabola, plus the 4 ITU-R BS.1770-4 phases, whichever reads higher.
+// All gains at exactly 1 (and no boost parts in flight): the output is the delayed input, bit for bit.
 sealed class Limiter {
-  public static readonly double[] XOVER = { 44, 88, 177, 355, 710, 1420, 2840, 5680, 11360 };
-  public static readonly double[] CENTERS = { 31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
-  public readonly int L, N;
-  readonly double ceil = Math.Pow(10, -0.3 / 20), att, rel;
-  readonly double[][] bq; readonly double[][][] z; readonly double[][][] dl; readonly SlidingMin[] win; readonly SlidingMin fin;
-  readonly double[] g, need, boost, cut, o = new double[2]; readonly double[][] band, dlf; readonly int[] order;
-  double gf = 1; long idx;
+  public const int H = 64, G = 4, PH = G - 1 + 4; // interpolator half length (taps each side); G-1 positions between samples + 4 ITU phases
+  public readonly int L, WA, WB; readonly int M, slots;
+  public double Ceil = Math.Pow(10, -1.0 / 20);
+  readonly double[] s0R, SR, yR;
+  readonly double[][] dR; readonly Smoother[] sm; readonly long[] lastNZ; readonly bool[] alive;
+  readonly Smoother smB;
+  readonly double[] needS, ivP, ivC, dv, alpha; readonly int[] al;
+  double ivPB = 1; long idx;
+  public long Clamps, Limited; // samples the last-resort clamp moved by more than rounding (should stay 0), samples with any gain < 1
 
-  public Limiter(int rate) {
-    L = Math.Max(1, (int)Math.Round(rate * 0.005));
-    att = Math.Exp(-5.0 / L); rel = Math.Exp(-1 / (rate * 0.15));
-    var xs = new List<double[]>();
-    foreach (var f in XOVER) {
-      if (f >= rate * 0.45) continue;
-      double w = 2 * Math.PI * f / rate, cs = Math.Cos(w), al = Math.Sin(w) / (2 * Math.Sqrt(0.5)), a0 = 1 + al;
-      xs.Add(new[] { (1 - cs) / 2 / a0, (1 - cs) / a0, (1 - cs) / 2 / a0, -2 * cs / a0, (1 - al) / a0 });
-    }
-    bq = xs.ToArray(); N = bq.Length + 1;
-    z = new double[2][][]; dl = new double[2][][]; band = new double[2][]; dlf = new double[2][];
-    for (int ch = 0; ch < 2; ch++) {
-      z[ch] = new double[bq.Length][]; for (int j = 0; j < bq.Length; j++) z[ch][j] = new double[4];
-      dl[ch] = new double[N][]; for (int j = 0; j < N; j++) dl[ch][j] = new double[L];
-      band[ch] = new double[N]; dlf[ch] = new double[L];
-    }
-    win = new SlidingMin[N]; for (int j = 0; j < N; j++) win[j] = new SlidingMin(L + 1);
-    fin = new SlidingMin(L + 1);
-    g = new double[N]; need = new double[N]; boost = new double[N]; cut = new double[N]; order = new int[N];
-    for (int k = 0; k < N; k++) { g[k] = 1; boost[k] = 1; order[k] = k; }
+  public Limiter(int rate, int slots) {
+    this.slots = slots;
+    WA = Math.Max(2, (int)Math.Round(rate * 0.005)); WB = Math.Max(2, (int)Math.Round(rate * 0.003));
+    L = 4 * H + WA + WB - 2;
+    int need = 2 * H + Math.Max(WA, WB) + 4, rs = 1; while (rs < need) rs <<= 1; M = rs - 1;
+    double rel = Math.Exp(-1 / (rate * 0.15));
+    s0R = new double[2 * rs]; SR = new double[2 * rs]; yR = new double[2 * rs];
+    dR = new double[slots][]; sm = new Smoother[slots]; lastNZ = new long[slots]; alive = new bool[slots];
+    for (int k = 0; k < slots; k++) { dR[k] = new double[2 * rs]; sm[k] = new Smoother(WA, WA + 2 * H, rel); }
+    smB = new Smoother(WB, WB + 2 * H, rel);
+    needS = new double[slots]; ivP = new double[slots]; ivC = new double[slots]; dv = new double[slots]; alpha = new double[slots]; al = new int[slots];
   }
-  public void SetBoost(double[] b) { for (int k = 0; k < N; k++) boost[k] = Math.Max(1, k < b.Length ? b[k] : 1); }
+  // shortcut: rings of slots that went quiet are cleared on revival, not on Reset (they are dead, so never read)
   public void Reset() {
-    for (int ch = 0; ch < 2; ch++) { foreach (var s in z[ch]) Array.Clear(s, 0, 4); foreach (var d in dl[ch]) Array.Clear(d, 0, L); Array.Clear(dlf[ch], 0, L); }
-    for (int k = 0; k < N; k++) { g[k] = 1; win[k].Clear(); }
-    fin.Clear(); gf = 1; idx = 0;
+    Array.Clear(s0R, 0, s0R.Length); Array.Clear(SR, 0, SR.Length); Array.Clear(yR, 0, yR.Length);
+    for (int k = 0; k < slots; k++) { alive[k] = false; sm[k].Reset(); }
+    smB.Reset(); ivPB = 1; idx = 0;
   }
+  public bool Busy { get { if (!smB.Idle) return true; for (int k = 0; k < slots; k++) if (alive[k]) return true; return false; } }
 
-  void Needs(double[] b) {
-    double s = 0; for (int k = 0; k < N; k++) s += b[k];
-    if (Math.Abs(s) <= ceil) return;
-    double sg = s > 0 ? 1 : -1, excess = Math.Abs(s) - ceil, room = 0;
-    for (int k = 0; k < N; k++) { double part = sg * b[k]; cut[k] = part > 0 && boost[k] > 1 ? part * (1 - 1 / boost[k]) : 0; room += cut[k]; }
-    if (room > excess) { double f = excess / room; for (int k = 0; k < N; k++) cut[k] *= f; excess = 0; } else excess -= room;
-    if (excess > 0) {
-      Array.Sort(order, (p, q) => (sg * b[q] - cut[q]).CompareTo(sg * b[p] - cut[p]));
-      foreach (int k in order) {
-        double left = sg * b[k] - cut[k];
-        if (left <= 0 || excess <= 0) break;
-        double more = Math.Min(excess, left); cut[k] += more; excess -= more;
+  internal static double I0(double x) { double s = 1, t = 1; for (int k = 1; k < 40; k++) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; }
+  // ITU-R BS.1770-4 Annex 2 example interpolator (4 phases, 12 taps). Its passband ripple makes it read up to ~0.2 dB above the
+  // ideal reconstruction on some music, so the detector takes the larger of both: the output passes either meter.
+  static readonly double[] ITU0 = { 0.0017089843750, 0.0109863281250, -0.0196533203125, 0.0332031250000, -0.0594482421875, 0.1373291015625, 0.9721679687500, -0.1022949218750, 0.0476074218750, -0.0266113281250, 0.0148925781250, -0.0083007812500 };
+  static readonly double[] ITU1 = { -0.0291748046875, 0.0292968750000, -0.0517578125000, 0.0891113281250, -0.1665039062500, 0.4650878906250, 0.7797851562500, -0.2003173828125, 0.1015625000000, -0.0582275390625, 0.0330810546875, -0.0189208984375 };
+  // kernels: value near the interval (m, m+1) = sum w[j] x[m + KOFF[p] + j]
+  // KER finds the peak; KERS (32 taps) splits it into the boost parts' shares, which only set proportions: stage B holds the ceiling
+  const int HS = 16;
+  static readonly int[] KOFF = new int[PH], KOFFS = new int[PH];
+  static readonly double[][] KER = Kernel(H, 9, KOFF), KERS = Kernel(HS, 8, KOFFS); // after KOFF and the ITU tables: static fields initialize in text order
+  // no kernel output can exceed KS times the largest sample in its window (+ the estimate bias)
+  static readonly double KS = KER.Max(w => w.Sum(v => Math.Abs(v))) * 1.0035;
+  static double[][] Kernel(int h, double beta, int[] koff) {
+    var ker = new double[PH][];
+    for (int p = 0; p < G - 1; p++) {
+      double tau = (p + 1) / (double)G, sum = 0; var w = new double[2 * h];
+      for (int j = 0; j < 2 * h; j++) {
+        double u = tau + h - 1 - j, r = u / h, sinc = Math.Sin(Math.PI * u) / (Math.PI * u);
+        w[j] = sinc * I0(beta * Math.Sqrt(Math.Max(0, 1 - r * r))) / I0(beta); sum += w[j];
       }
+      for (int j = 0; j < 2 * h; j++) w[j] /= sum; // exact at DC
+      ker[p] = w; koff[p] = 1 - h;
     }
-    for (int k = 0; k < N; k++) if (cut[k] > 0) { double gg = 1 - cut[k] / (sg * b[k]); if (gg < need[k]) need[k] = gg; }
+    // ITU y[4n+p] = sum h_p[k] x[n-k], taken at n = m + 6 so its window (m-5 .. m+6) lies inside the available samples
+    var itu = new[] { ITU0, ITU1, ITU1.Reverse().ToArray(), ITU0.Reverse().ToArray() };
+    for (int p = 0; p < 4; p++) { ker[G - 1 + p] = itu[p].Reverse().ToArray(); koff[G - 1 + p] = -5; }
+    return ker;
+  }
+  // value number p near the interval (m, m+1) of ring r, channel ch
+  double Interp(double[] r, long m, int p, int ch, bool share = false) {
+    double[] w = share ? KERS[p] : KER[p]; double s = 0; long b = m + (share ? KOFFS[p] : KOFF[p]);
+    for (int j = 0; j < w.Length; j++) s += w[j] * r[2 * (int)((b + j) & M) + ch];
+    return s;
+  }
+  // the highest value between samples m and m+1 (signed): the G-grid maximum refined by a parabola through its neighbours, or
+  // an ITU phase if that reads higher. pi: the kernel it came from, -1 / -2 for sample m / m+1
+  readonly double[] gv = new double[G + 1];
+  double Peak(double[] r, long m, int ch, out int pi) {
+    gv[0] = r[2 * (int)(m & M) + ch]; gv[G] = r[2 * (int)((m + 1) & M) + ch];
+    // quick bound: when nothing in the window can reach the ceiling, the exact peak is not needed (callers only act above it)
+    double amax = 0; for (long k = m + 1 - H; k <= m + H; k++) { double v = r[2 * (int)(k & M) + ch]; if (v > amax) amax = v; else if (-v > amax) amax = -v; }
+    if (amax * KS <= Ceil) { pi = -1; return gv[0]; }
+    for (int p = 0; p < G - 1; p++) gv[p + 1] = Interp(r, m, p, ch);
+    int bi = 0; for (int i = 1; i <= G; i++) if (Math.Abs(gv[i]) > Math.Abs(gv[bi])) bi = i;
+    double pk = Math.Abs(gv[bi]), sg = gv[bi] < 0 ? -1 : 1;
+    if (bi > 0 && bi < G) {
+      double y0 = Math.Abs(gv[bi - 1]), y1 = pk, y2 = Math.Abs(gv[bi + 1]), den = y0 - 2 * y1 + y2;
+      if (den < 0) { double d = 0.5 * (y0 - y2) / den; pk = y1 - 0.25 * (y0 - y2) * d; }
+    }
+    pi = bi == 0 ? -1 : bi == G ? -2 : bi - 1;
+    if (pi >= 0) pk *= 1.0035; // +0.03 dB: the measured worst grid + kernel error on music (D:\ test set: 0.03 dB), so estimates err high
+    for (int p = G - 1; p < PH; p++) { double v = Interp(r, m, p, ch); if (Math.Abs(v) > pk) { pk = Math.Abs(v); sg = v < 0 ? -1 : 1; pi = p; } }
+    return sg * pk;
+  }
+  // stage A: the a_k this value (sum S, boost parts dv) needs
+  void Alloc(double S, int nal, double[] need) {
+    double a = Math.Abs(S); if (a <= Ceil) return;
+    double sg = S > 0 ? 1 : -1, C = 0;
+    for (int i = 0; i < nal; i++) { double q = sg * dv[al[i]]; if (q > 0) C += q; }
+    if (C <= 0) return;
+    double f = (a - Ceil) / C; if (f > 1) f = 1;
+    for (int i = 0; i < nal; i++) { int k = al[i]; if (sg * dv[k] > 0 && 1 - f < need[k]) need[k] = 1 - f; }
   }
 
-  // x: input (interleaved, in place). outp == null: write the plain-delayed input instead of the limited signal (bit-exact)
-  public void Process(double[] x, int frames, double[] outp, double[] dly, ref int dp) {
-    for (int k = 0, j = 0; k < frames; k++, j += 2, idx++) {
-      for (int i = 0; i < N; i++) need[i] = 1;
-      for (int ch = 0; ch < 2; ch++) {
-        double[] b = band[ch]; double rest = x[j + ch];
-        for (int q = 0; q < bq.Length; q++) {
-          double[] c = bq[q], s = z[ch][q];
-          double y = c[0] * rest + s[0]; s[0] = c[1] * rest - c[3] * y + s[1]; s[1] = c[2] * rest - c[4] * y;
-          double y2 = c[0] * y + s[2]; s[2] = c[1] * y - c[3] * y2 + s[3]; s[3] = c[2] * y - c[4] * y2;
-          b[q] = y2; rest -= y2;
+  // returns true when every output sample is the delayed s0 untouched
+  public bool Process(double[] s0, double[][] d, bool[] live, int n, double[] outp, int at, bool detA, bool detB) {
+    bool exact = true;
+    for (int i = 0; i < n; i++, idx++) {
+      int w = 2 * (int)(idx & M);
+      double S0 = s0[2 * i], S1 = s0[2 * i + 1];
+      s0R[w] = S0; s0R[w + 1] = S1;
+      int nal = 0;
+      for (int k = 0; k < slots; k++) {
+        if (live[k]) {
+          if (!alive[k]) { alive[k] = true; Array.Clear(dR[k], 0, dR[k].Length); sm[k].Reset(); ivP[k] = 1; }
+          double a = d[k][2 * i], b = d[k][2 * i + 1]; dR[k][w] = a; dR[k][w + 1] = b; S0 += a; S1 += b;
+          if (a != 0 || b != 0) lastNZ[k] = idx;
+        } else if (alive[k]) {
+          dR[k][w] = 0; dR[k][w + 1] = 0;
+          if (idx - lastNZ[k] > M && sm[k].Idle) { alive[k] = false; continue; }
+        } else continue;
+        al[nal++] = k;
+      }
+      SR[w] = S0; SR[w + 1] = S1;
+      // stage A at sample m = idx - H (the interpolator needs H samples after it)
+      long m = idx - H;
+      if (nal > 0) {
+        if (detA) {
+          int wm = 2 * (int)(m & M);
+          for (int q = 0; q < nal; q++) { needS[al[q]] = 1; ivC[al[q]] = 1; }
+          for (int ch = 0; ch < 2; ch++) {
+            for (int q = 0; q < nal; q++) dv[al[q]] = dR[al[q]][wm + ch];
+            Alloc(SR[wm + ch], nal, needS);
+            int pi; double sp = Peak(SR, m, ch, out pi);
+            if (Math.Abs(sp) > Ceil) {
+              // shares of the boost parts at the point where the over peaks
+              for (int q = 0; q < nal; q++) { var r = dR[al[q]]; dv[al[q]] = pi >= 0 ? Interp(r, m, pi, ch, true) : r[2 * (int)((m + (pi == -2 ? 1 : 0)) & M) + ch]; }
+              Alloc(sp, nal, ivC);
+            }
+          }
+          // an over between m and m+1 is charged to both samples
+          for (int q = 0; q < nal; q++) { int k = al[q]; double nd = Math.Min(needS[k], Math.Min(ivP[k], ivC[k])); ivP[k] = ivC[k]; alpha[k] = sm[k].Push(nd); }
+        } else for (int q = 0; q < nal; q++) { int k = al[q]; ivP[k] = 1; alpha[k] = sm[k].Push(1); }
+      }
+      // the gains just computed belong to sample mo
+      long mo = m - WA + 1 - H; int wo = 2 * (int)(mo & M);
+      double y0 = s0R[wo], y1 = s0R[wo + 1];
+      bool cut = false;
+      for (int q = 0; q < nal; q++) { int k = al[q]; double a = alpha[k]; y0 += a * dR[k][wo]; y1 += a * dR[k][wo + 1]; if (a != 1) cut = true; }
+      if (nal > 0) exact = false;
+      int wy = 2 * (int)(mo & M); yR[wy] = y0; yR[wy + 1] = y1;
+      // stage B at sample mb, on the actual output
+      long mb = mo - H; double g;
+      if (detB) {
+        int wb = 2 * (int)(mb & M); double nd = 1, iv = 1;
+        for (int ch = 0; ch < 2; ch++) {
+          double a = Math.Abs(yR[wb + ch]); if (a > Ceil && Ceil / a < nd) nd = Ceil / a;
+          int pi; a = Math.Abs(Peak(yR, mb, ch, out pi)); if (a > Ceil && Ceil / a < iv) iv = Ceil / a;
         }
-        b[N - 1] = rest;
-        Needs(b);
+        g = smB.Push(Math.Min(nd, Math.Min(ivPB, iv))); ivPB = iv;
+      } else { g = smB.Push(1); ivPB = 1; }
+      long ob = mb - WB + 1 - H; int wq = 2 * (int)(ob & M), j = 2 * (at + i);
+      double o0 = yR[wq], o1 = yR[wq + 1];
+      if (g != 1) { o0 *= g; o1 *= g; exact = false; cut = true; }
+      if (cut) Limited++;
+      if (detB) {
+        if (o0 > Ceil) { if (o0 > Ceil * (1 + 1e-9)) Clamps++; o0 = Ceil; } else if (o0 < -Ceil) { if (o0 < -Ceil * (1 + 1e-9)) Clamps++; o0 = -Ceil; }
+        if (o1 > Ceil) { if (o1 > Ceil * (1 + 1e-9)) Clamps++; o1 = Ceil; } else if (o1 < -Ceil) { if (o1 < -Ceil * (1 + 1e-9)) Clamps++; o1 = -Ceil; }
       }
-      for (int i = 0; i < N; i++) { double t = win[i].Push(idx, need[i]); g[i] = t < g[i] ? t + (g[i] - t) * att : t + (g[i] - t) * rel; }
-      int p = (int)(idx % L);
-      double needF = 1;
-      for (int ch = 0; ch < 2; ch++) {
-        double[][] d = dl[ch]; double[] b = band[ch]; double v = 0;
-        for (int i = 0; i < N; i++) { v += d[i][p] * g[i]; d[i][p] = b[i]; }
-        o[ch] = v; double a = Math.Abs(v); if (a > ceil && ceil / a < needF) needF = ceil / a;
-      }
-      double tf = fin.Push(idx, needF);
-      gf = tf < gf ? tf + (gf - tf) * att : tf + (gf - tf) * rel;
-      // plain delay of the input, same latency (L frames)
-      double rl = dly[dp], rr = dly[dp + 1]; dly[dp] = x[j]; dly[dp + 1] = x[j + 1]; dp += 2; if (dp >= 2 * L) dp = 0;
-      for (int ch = 0; ch < 2; ch++) {
-        double[] f = dlf[ch]; double v = f[p] * gf; f[p] = o[ch];
-        if (outp != null) x[j + ch] = v > ceil ? ceil : v < -ceil ? -ceil : v;
-        else x[j + ch] = ch == 0 ? rl : rr;
-      }
+      outp[j] = o0; outp[j + 1] = o1;
     }
+    return exact;
   }
 }
 
-// minimum of the last w values pushed (monotonic deque)
-sealed class SlidingMin {
-  readonly int w, cap; readonly double[] v; readonly long[] q; int h, t, n;
-  public SlidingMin(int w) { this.w = w; v = new double[w]; cap = w + 1; q = new long[cap]; }
-  public void Clear() { h = t = n = 0; }
-  public double Push(long i, double x) {
-    while (n > 0 && q[h] <= i - w) { h = (h + 1) % cap; n--; }
-    while (n > 0 && v[q[(t - 1 + cap) % cap] % w] >= x) { t = (t - 1 + cap) % cap; n--; }
-    q[t] = i; t = (t + 1) % cap; n++;
-    v[i % w] = x;
-    return v[q[h] % w];
+// gain smoothing that never overshoots: min-hold over the last `hold` needs, release toward 1, then a W-long moving average.
+// With hold = W + 2K, the value returned by a push belongs to the need pushed W-1+K pushes earlier and is at or below every
+// need within K samples of it: the gain is flat around a peak, so the inter-sample values next to it see the same gain.
+sealed class Smoother {
+  readonly int W, HW, cap; readonly double rel; readonly double[] ring, dv; readonly long[] di;
+  int pos, h, t, cnt, non1; double sum, r = 1; long n;
+  public Smoother(int w, int hold, double rel) { W = w; HW = hold; this.rel = rel; ring = new double[w]; cap = hold + 1; dv = new double[cap]; di = new long[cap]; Reset(); }
+  public void Reset() { for (int i = 0; i < W; i++) ring[i] = 1; sum = W; non1 = 0; r = 1; h = t = cnt = 0; pos = 0; }
+  public bool Idle { get { return non1 == 0 && r == 1 && cnt == 0; } }
+  public double Push(double need) {
+    n++;
+    if (need >= 1 && Idle) return 1;
+    if (need < 1) { while (cnt > 0 && dv[(t - 1 + cap) % cap] >= need) { t = (t - 1 + cap) % cap; cnt--; } dv[t] = need; di[t] = n; t = (t + 1) % cap; cnt++; }
+    while (cnt > 0 && di[h] <= n - HW) { h = (h + 1) % cap; cnt--; }
+    // release aims a little past 1 so it lands on exactly 1 in finite time (a plain exponential would take ~4 s to snap)
+    double held = cnt > 0 ? dv[h] : 1, up = 1.001 - (1.001 - r) * rel;
+    if (up > 1) up = 1;
+    r = held < up ? held : up;
+    double old = ring[pos]; ring[pos] = r; if (++pos == W) pos = 0;
+    if (old != 1) non1--; if (r != 1) non1++;
+    if (non1 == 0) { sum = W; return 1; }
+    sum += r - old;
+    if (pos == 0) { sum = 0; for (int i = 0; i < W; i++) sum += ring[i]; } // no drift
+    return sum / W;
   }
 }
 
@@ -352,12 +532,12 @@ sealed class Reverb {
     fft = new Fft(N);
     // the IR (Engine.makeIR): decaying noise, high frequencies die faster
     int len = (int)Math.Floor(rate * (0.25 + size * 5.5));
-    double decay = 6.5 - fade * 5; var rnd = new Random(1234);
+    double decay = 6.5 - fade * 5; uint seed = 1234; // mulberry32, the same noise as renderer/dsp.js
     var ir = new double[2][]; double pow = 0;
     for (int ch = 0; ch < 2; ch++) {
       ir[ch] = new double[len]; double lpv = 0;
       for (int i = 0; i < len; i++) {
-        double x = (double)i / len, nz = (rnd.NextDouble() * 2 - 1) * Math.Pow(1 - x, decay), k = 1 - Math.Min(0.97, damp * x * 1.2);
+        double x = (double)i / len, nz = (Noise(ref seed) * 2 - 1) * Math.Pow(1 - x, decay), k = 1 - Math.Min(0.97, damp * x * 1.2);
         lpv += (nz - lpv) * k; ir[ch][i] = lpv; pow += lpv * lpv;
       }
     }
@@ -380,6 +560,11 @@ sealed class Reverb {
     pd = new double[2 * ((int)(rate * 0.3) + 1)];
     tap = new double[2 * B]; dryD = new double[2 * B];
     Params(c);
+  }
+  static double Noise(ref uint a) {
+    a += 0x6D2B79F5; uint t = (a ^ (a >> 15)) * (1 | a);
+    t = (t + (t ^ (t >> 7)) * (61 | t)) ^ t;
+    return (t ^ (t >> 14)) / 4294967296.0;
   }
   public void Params(DspConfig c) {
     pdLen = Math.Min(pd.Length / 2 - 1, (int)Math.Round(c.PreDelay * 0.3 * rate));
@@ -451,6 +636,129 @@ sealed class Reverb {
 }
 
 // iterative radix-2 complex FFT
+// virtual speakers: the signal as two speakers at +-45 degrees in a room would play it to a KU100 dummy head (SADIE II BRIRs,
+// tools/brir.py, embedded as the "brir" resource). Partitioned FFT convolution in uniform blocks of B frames: the output is B
+// frames late. Four paths: each speaker reaches both ears
+sealed class Speakers {
+  public readonly int B; readonly int N, P;
+  readonly double[][] are, aim, bre, bim; // per partition: [LL | LR] and [RL | RR] half spectra (speaker -> ear)
+  readonly double[][] xre, xim; int head; // frequency-domain delay line of input spectra
+  readonly double[] inL, inR, outL, outR, yre, yim, wre, wim; int pos;
+  readonly Fft fft;
+
+  static int[] rates; static float[][][] sets; // the measured sets: [set][LL, LR, RL, RR]
+  static readonly object loadLock = new object();
+  static bool Load() {
+    lock (loadLock) {
+      if (sets != null) return true;
+      using (var s = typeof(Speakers).Assembly.GetManifestResourceStream("brir")) {
+        if (s == null) return false;
+        var br = new System.IO.BinaryReader(s); int n = br.ReadInt32();
+        var r = new int[n]; var st = new float[n][][];
+        for (int i = 0; i < n; i++) {
+          r[i] = br.ReadInt32(); int len = br.ReadInt32(); st[i] = new float[4][];
+          for (int k = 0; k < 4; k++) { st[i][k] = new float[len]; for (int j = 0; j < len; j++) st[i][k][j] = br.ReadSingle(); }
+        }
+        rates = r; sets = st;
+      }
+      return true;
+    }
+  }
+  // the four responses at this rate: the measured set nearest on a log scale, resampled when the rate differs
+  public static double[][] For(int rate) {
+    if (!Load()) return null;
+    int s = 0;
+    for (int i = 1; i < rates.Length; i++) if (Math.Abs(Math.Log((double)rate / rates[i])) < Math.Abs(Math.Log((double)rate / rates[s]))) s = i;
+    var h = new double[4][];
+    for (int k = 0; k < 4; k++) h[k] = Resample(sets[s][k], rates[s], rate);
+    return h;
+  }
+  // windowed sinc (Kaiser beta 8, 32 zero crossings a side, cutoff 0.97 of the lower Nyquist). An impulse response's samples
+  // scale with 1/rate, so its gain is kept. Same rate: an exact copy
+  static double[] WTab;
+  public static double[] Resample(float[] x, int r0, int r1) {
+    var y = new double[r0 == r1 ? x.Length : (int)Math.Round(x.Length * (double)r1 / r0)];
+    if (r0 == r1) { for (int i = 0; i < x.Length; i++) y[i] = x[i]; return y; }
+    if (WTab == null) { var w = new double[4097]; for (int j = 0; j <= 4096; j++) { double r = j / 4096.0; w[j] = Limiter.I0(8 * Math.Sqrt(Math.Max(0, 1 - r * r))) / Limiter.I0(8); } WTab = w; }
+    double ratio = (double)r1 / r0, fc = Math.Min(1, ratio) * 0.97; int hw = (int)Math.Ceiling(32 / fc);
+    for (int m = 0; m < y.Length; m++) {
+      double t = m / ratio, s = 0; int c = (int)Math.Floor(t);
+      for (int k = Math.Max(0, c - hw + 1), e = Math.Min(x.Length - 1, c + hw); k <= e; k++) {
+        double u = t - k, ar = Math.Abs(u) / hw * 4096; int j = (int)ar; if (j >= 4096) continue;
+        double win = WTab[j] + (WTab[j + 1] - WTab[j]) * (ar - j), a = Math.PI * fc * u;
+        s += x[k] * fc * (u == 0 ? 1 : Math.Sin(a) / a) * win;
+      }
+      y[m] = s / ratio;
+    }
+    return y;
+  }
+
+  public Speakers(int rate, double[][] h) {
+    int b = 1; while (b < rate * 0.008) b <<= 1; B = b; N = 2 * B;
+    fft = new Fft(N);
+    int len = h[0].Length; P = (len + B - 1) / B;
+    are = new double[P][]; aim = new double[P][]; bre = new double[P][]; bim = new double[P][]; xre = new double[P][]; xim = new double[P][];
+    var re = new double[N]; var im = new double[N];
+    for (int p = 0; p < P; p++) {
+      for (int pair = 0; pair < 2; pair++) {
+        Array.Clear(re, 0, N); Array.Clear(im, 0, N);
+        for (int i = 0; i < B && p * B + i < len; i++) { re[i] = h[2 * pair][p * B + i]; im[i] = h[2 * pair + 1][p * B + i]; }
+        fft.Run(re, im, false);
+        var dr = new double[2 * (B + 1)]; var di = new double[2 * (B + 1)];
+        Split(re, im, dr, di);
+        if (pair == 0) { are[p] = dr; aim[p] = di; } else { bre[p] = dr; bim[p] = di; }
+      }
+      xre[p] = new double[2 * (B + 1)]; xim[p] = new double[2 * (B + 1)];
+    }
+    inL = new double[N]; inR = new double[N]; outL = new double[B]; outR = new double[B];
+    yre = new double[N]; yim = new double[N]; wre = new double[2 * (B + 1)]; wim = new double[2 * (B + 1)];
+  }
+  public void Reset() {
+    for (int p = 0; p < P; p++) { Array.Clear(xre[p], 0, xre[p].Length); Array.Clear(xim[p], 0, xim[p].Length); }
+    Array.Clear(inL, 0, N); Array.Clear(inR, 0, N); Array.Clear(outL, 0, B); Array.Clear(outR, 0, B); pos = 0;
+  }
+  // full complex spectrum of (a + i b) -> half spectra of a and b: dst[0..B] = a, dst[B+1..2B+1] = b
+  void Split(double[] re, double[] im, double[] dre, double[] dim) {
+    for (int k = 0; k <= B; k++) {
+      int m = (N - k) % N;
+      dre[k] = (re[k] + re[m]) / 2; dim[k] = (im[k] - im[m]) / 2;
+      dre[B + 1 + k] = (im[k] + im[m]) / 2; dim[B + 1 + k] = (re[m] - re[k]) / 2;
+    }
+  }
+  void Block() {
+    head = (head + P - 1) % P;
+    Array.Copy(inL, yre, N); Array.Copy(inR, yim, N);
+    fft.Run(yre, yim, false);
+    Split(yre, yim, xre[head], xim[head]);
+    Array.Clear(wre, 0, wre.Length); Array.Clear(wim, 0, wim.Length);
+    int o = B + 1;
+    for (int p = 0; p < P; p++) {
+      double[] xr = xre[(head + p) % P], xi = xim[(head + p) % P], ar = are[p], ai = aim[p], br = bre[p], bi = bim[p];
+      for (int k = 0; k <= B; k++) {
+        double lr = xr[k], li = xi[k], rr = xr[o + k], ri = xi[o + k];
+        // left ear: L * LL + R * RL; right ear: L * LR + R * RR
+        wre[k] += lr * ar[k] - li * ai[k] + rr * br[k] - ri * bi[k]; wim[k] += lr * ai[k] + li * ar[k] + rr * bi[k] + ri * br[k];
+        wre[o + k] += lr * ar[o + k] - li * ai[o + k] + rr * br[o + k] - ri * bi[o + k]; wim[o + k] += lr * ai[o + k] + li * ar[o + k] + rr * bi[o + k] + ri * br[o + k];
+      }
+    }
+    for (int k = 0; k <= B; k++) {
+      double lr = wre[k], li = wim[k], rr = wre[o + k], ri = wim[o + k];
+      yre[k] = lr - ri; yim[k] = li + rr;
+      if (k > 0 && k < B) { yre[N - k] = lr + ri; yim[N - k] = -li + rr; }
+    }
+    fft.Run(yre, yim, true);
+    for (int i = 0; i < B; i++) { outL[i] = yre[B + i]; outR[i] = yim[B + i]; }
+    Array.Copy(inL, B, inL, 0, B); Array.Copy(inR, B, inR, 0, B);
+  }
+  public void Run(double[] x, int frames) {
+    for (int i = 0, j = 0; i < frames; i++, j += 2) {
+      inL[B + pos] = x[j]; inR[B + pos] = x[j + 1];
+      x[j] = outL[pos]; x[j + 1] = outR[pos];
+      if (++pos == B) { Block(); pos = 0; }
+    }
+  }
+}
+
 sealed class Fft {
   readonly int n; readonly int[] rev; readonly double[] cos, sin;
   public Fft(int n) {

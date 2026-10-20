@@ -9,8 +9,8 @@
     "start": "electron .",
     "ffmpeg": "node tools/get-ffmpeg.mjs",
     "postinstall": "node tools/get-ffmpeg.mjs",
-    "test": "node test/lyrics.test.mjs && node test/queue.test.mjs && node test/exclusive.test.mjs && node test/eq.test.mjs && node test/netpath.test.mjs && node test/limiter.test.mjs && npm run build:native && native\\cadence-wasapi.exe --selftest",
-    "build:native": "%WINDIR%\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe -nologo -O -platform:x64 -out:native\\cadence-wasapi.exe native\\wasapi.cs native\\dsp.cs",
+    "test": "node test/lyrics.test.mjs && node test/queue.test.mjs && node test/exclusive.test.mjs && node test/eq.test.mjs && node test/netpath.test.mjs && node test/dsp.test.mjs && npm run build:native && native\\cadence-wasapi.exe --selftest",
+    "build:native": "%WINDIR%\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe -nologo -O -platform:x64 -out:native\\cadence-wasapi.exe -resource:renderer\\brir.bin,brir native\\wasapi.cs native\\dsp.cs",
     "dist:beta": "npm run build:native && npm run ffmpeg && node tools/build-beta.mjs",
     "dist": "npm run build:native && npm run ffmpeg && electron-packager . Cadence --platform=win32 --arch=x64 --icon=build/icon.ico --out=release --overwrite --asar.unpack=**/{native/ffmpeg/ffmpeg.exe,native/cadence-wasapi.exe} --ignore=\"^/(test|release|dist|tools|scratch|import|[.]git|[.]vscode)(/|$)|^/(README[.]md|package-lock[.]json|[.]gitignore)$|^/native/[^/]+[.]cs$|[.](log|bak|bad|tmp|map)$\" --app-copyright=Cadence"
   },
@@ -23,6 +23,8 @@
   "dependencies": {
     "butterchurn": "^2.6.7",
     "butterchurn-presets": "^2.4.7",
+    "gsap": "^3.15.0",
+    "motion": "^14.3.0",
     "music-metadata": "^12.2.1"
   },
   "allowScripts": {

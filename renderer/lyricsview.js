@@ -4,6 +4,7 @@ import { S, set, engine, saveSettings, titleOf, artistOf } from './core.js';
 import { parseLyrics, activeLine } from './lyrics.js';
 import { back, onTeardown } from './views.js';
 import { flip } from './motion.js';
+import * as kin from './designs/kinetic.js';
 
 const cache = new Map(); // path -> { p, at, online, ok }; misses expire and are retried when online lookup is toggled
 const MISS_TTL = 60000;
@@ -26,6 +27,7 @@ function lastWordLen(l) {
   return Math.max(0.4, Math.min(2.5, 1.5 * (d.length ? d[d.length >> 1] : 0.4)));
 }
 export function lyricsView() {
+  const K = set.design === 'cinema-press' || set.design === 'two-ink'; // kinetic lyric typography
   const v = h('section', { class: 'view lyrics-view' });
   const head = h('div', { class: 'ly-head' });
   const scroll = h('div', { class: 'ly-scroll', style: { '--ly-size': set.lyricsSize + 'px' } });
@@ -80,30 +82,36 @@ export function lyricsView() {
     }
     lines = ly.lines; synced = ly.synced;
     setSparse(!synced && lines.filter(l => l.text).length <= 2); // e.g. a lone "♪ Instrumental ♪"
-    lineEls = lines.map(l => h('p', {
-      class: 'ly-line' + (synced ? '' : ' plain') + (!l.text ? ' gap' : '') + (l.voice && l.voice !== 'v1' ? ' alt' : ''),
-      onclick: () => { if (synced) { engine.seek(Math.max(0, l.t + set.lyricsOffset)); userScrollAt = 0; } },
-    }, l.words ? l.words.map(w => h('span', { class: 'w' }, w.text)) : (l.text || '♪')));
+    const cls = l => (synced ? '' : ' plain') + (!l.text ? ' gap' : '') + (l.voice && l.voice !== 'v1' ? ' alt' : '');
+    const seekTo = l => () => { if (synced) { engine.seek(Math.max(0, l.t + set.lyricsOffset)); userScrollAt = 0; } };
+    lineEls = lines.map((l, i) => K ? kin.buildLine(l, synced, lines[i + 1]?.t, seekTo(l), cls(l))
+      : h('p', { class: 'ly-line' + cls(l), onclick: seekTo(l) }, l.words ? l.words.map(w => h('span', { class: 'w' }, w.text)) : (l.text || '♪')));
     scroll.append(...lineEls, h('div', { class: 'ly-source' }, `${synced ? 'Synced' : 'Unsynced'} lyrics · ${ly.source}`));
+    if (K && synced) { kin.fit(scroll); kin.ramp(lineEls, -1, -1); }
   }
   function tick() {
-    if (document.hidden || !engine.playing || !synced) tm = setTimeout(tick, 250); else raf = requestAnimationFrame(tick); // idle or nothing to sync: no per-frame loop
+    // per-frame only while a word-timed line fills; line-level lyrics need ~20 checks a second, kinetic steps (1/16) ~30
+    if (document.hidden || !engine.playing || !synced) tm = setTimeout(tick, 250);
+    else if (!K && lines[active]?.words) raf = requestAnimationFrame(tick);
+    else tm = setTimeout(tick, K ? 33 : 50);
     if (engine.track !== track) { load(); return; }
     if (!synced || !lines.length) return;
     const pos = engine.position - set.lyricsOffset;
     const i = activeLine(lines, pos);
     if (i !== active) {
-      lineEls[active]?.classList.remove('active');
+      if (lineEls[active]) { lineEls[active].classList.remove('active'); if (K) kin.leave(lineEls[active]); }
       lineEls.forEach((el, k) => el.classList.toggle('past', k < i));
-      active = i;
+      const prev = active; active = i;
       const el = lineEls[i];
       if (el) {
         el.classList.add('active');
+        if (K) { kin.ramp(lineEls, i, prev); kin.enter(el, i, lines.length, scroll); }
         if (performance.now() - userScrollAt > 3500) scroll.scrollTo({ top: el.offsetTop - scroll.clientHeight * 0.38, behavior: set.animations === 'off' ? 'auto' : 'smooth' });
       }
     }
     const l = lines[i];
-    if (l?.words) lineEls[i].querySelectorAll('.w').forEach((w, k) => {
+    if (K) { if (lineEls[i]) kin.frame(lineEls[i], pos); }
+    else if (l?.words) lineEls[i].querySelectorAll('.w').forEach((w, k) => {
       const wt = l.words[k], nt = l.words[k + 1]?.t ?? l.end ?? Math.min(lines[i + 1]?.t ?? Infinity, wt.t + lastWordLen(l));
       // fill each word progressively across its duration
       w.style.setProperty('--fill', Math.max(0, Math.min(1, (pos - wt.t) / Math.max(0.05, nt - wt.t))) * 100 + '%');

@@ -78,7 +78,7 @@ body.no-blur .bg-layer { display: none; }
 .side-item .count { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .side-item .thumb { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; background: var(--surface-2); }
 
-/* category circle (colour per category, as in library) */
+/* category circle (colour per category) */
 .cat { display: grid; place-items: center; border-radius: 50%; background: var(--c, #5865f2); color: rgb(0 0 0 / .72); flex: none; }
 .cat .ic { fill: currentColor; }
 
@@ -502,6 +502,8 @@ button.chip { font: inherit; text-align: left; }
 .fx-card h3 .row-btns .tb-btn { height: 32px; min-width: 40px; }
 .aeq-list { margin-top: 12px; max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .aeq-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-radius: 10px; text-align: left; }
+.aeq-tilt { display: grid; grid-template-columns: 150px 1fr 56px; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; }
+.aeq-tilt span { text-align: right; color: var(--text-3); }
 .aeq-row:hover { background: var(--surface-2); }
 .aeq-row span { color: var(--text-3); font-size: 12px; }
 .dlg-text { color: var(--text-2); line-height: 1.5; }
@@ -1291,3 +1293,12 @@ body[data-theme="light"] .az.scrub { background: rgb(255 255 255 / .7); }
 
 /* Cadence Beta build: a small tag next to the name */
 .brand-tag { margin-left: 2px; padding: 2px 7px; border-radius: 999px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--accent)); background: rgb(var(--accent) / .14); box-shadow: inset 0 0 0 1px rgb(var(--accent) / .35); }
+
+/* ================================================================ v0.9 Liquid Glass on a native backdrop (Beta) */
+/* Mica / Acrylic: the page turns see-through so the Windows backdrop shows; the album glow stays as a tint on top */
+html:has(> body.mat-mica), html:has(> body.mat-acrylic), body.mat-mica, body.mat-acrylic { background: transparent; }
+body.mat-mica #bg, body.mat-acrylic #bg { opacity: .55; }
+
+/* ================================================================ v1.0 Designs */
+/* switching design reloads the window: fade the old look out first */
+body.design-out #app { opacity: 0; transition: opacity .18s ease-in; }

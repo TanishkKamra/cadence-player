@@ -1,4 +1,10 @@
-// Audio engine: ffmpeg (main process) -> worklet PCM player -> Web Audio DSP chain -> output device.
+// Audio engine: ffmpeg (main process) -> worklet PCM player -> 64-bit DSP worklet (dsp.js, the same code as the exclusive
+// helper's native/dsp.cs) -> output device.
+import { biquadCoef, biquadDb, brirFor } from './dsp.js';
+
+// crossfeed presets (bs2b's): on, corner Hz, how far below the direct sound the crossed bass sits (dB)
+const XFEED = { bs2b: '1 700 4.5', cmoy: '1 700 6', meier: '1 650 9.5' };
+
 export const EQ_FREQS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 // Reverb presets: size, filter, fade, preDelay, mix, preDelayMix, damp (0..1 each)
 export const REVERB_PARAMS = ['size', 'damp', 'filter', 'fade', 'preDelay', 'preDelayMix', 'mix'];
@@ -18,90 +24,6 @@ const dbToGain = db => Math.pow(10, db / 20);
 const clamp = (v, lo, hi, d = lo) => Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d;
 const RATES = [8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000];
 const okRate = r => RATES.includes(+r) ? +r : 0; // anything else: auto
-const IIR_TYPES = new Set(['lowshelf', 'highshelf', 'lowpass', 'highpass']);
-
-// RBJ cookbook coefficients with linear Q (Web Audio ignores Q on shelves and reads LP/HP Q as dB). Returns { b, a } with a[0] = 1.
-export function rbj(type, fs, freq, gainDb, q) {
-  const w = 2 * Math.PI * clamp(freq, 10, fs * 0.45, 1000) / fs, c = Math.cos(w), Q = clamp(q, 0.1, 30, 0.71);
-  const al = Math.sin(w) / (2 * Q), A = Math.pow(10, clamp(gainDb, -60, 60, 0) / 40), sa = 2 * Math.sqrt(A) * al;
-  let b, a;
-  if (type === 'lowshelf') {
-    b = [A * ((A + 1) - (A - 1) * c + sa), 2 * A * ((A - 1) - (A + 1) * c), A * ((A + 1) - (A - 1) * c - sa)];
-    a = [(A + 1) + (A - 1) * c + sa, -2 * ((A - 1) + (A + 1) * c), (A + 1) + (A - 1) * c - sa];
-  } else if (type === 'highshelf') {
-    b = [A * ((A + 1) + (A - 1) * c + sa), -2 * A * ((A - 1) + (A + 1) * c), A * ((A + 1) + (A - 1) * c - sa)];
-    a = [(A + 1) - (A - 1) * c + sa, 2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - sa];
-  } else {
-    const hp = type === 'highpass', k = hp ? 1 + c : 1 - c;
-    b = [k / 2, hp ? -k : k, k / 2]; a = [1 + al, -2 * c, 1 - al];
-  }
-  return { b: b.map(x => x / a[0]), a: [1, a[1] / a[0], a[2] / a[0]] };
-}
-// magnitude (dB) of { b, a } at freq (Hz)
-export function iirDb({ b, a }, freq, fs) {
-  const w = 2 * Math.PI * freq / fs, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
-  const nr = b[0] + b[1] * c1 + b[2] * c2, ni = -(b[1] * s1 + b[2] * s2), dr = a[0] + a[1] * c1 + a[2] * c2, di = -(a[1] * s1 + a[2] * s2);
-  return 10 * Math.log10(Math.max(1e-12, (nr * nr + ni * ni) / (dr * dr + di * di)));
-}
-let nextId = 1;
-const FLAT = { type: 'peaking', freq: 1000, q: 1 };
-const FADE = 0.03, COALESCE = 16;
-
-// A filter position that changes without clicks and without main-thread cost. Shelf/LP/HP run in a biquad AudioWorklet
-// ('cadence-iir'): a change is one postMessage of RBJ coefficients, which the processor glides to over ~20 ms (IIRFilterNode
-// can't change coefficients and costs ~12 ms to construct). Only a switch between worklet and native Biquad types (rare)
-// builds a second branch and crossfades linearly (the branches are correlated, so gains sum to 1). Changes are coalesced
-// (leading edge, then latest-wins every ~16 ms).
-export class Slot {
-  constructor(ctx, spec, gain = 0, mk = c => new AudioWorkletNode(c, 'cadence-iir', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' })) {
-    this.ctx = ctx; this.mk = mk; this.input = ctx.createGain(); this.output = ctx.createGain();
-    this.dying = new Set(); this.timer = 0; this.want = null;
-    this.branch = this.build(spec, gain, 1);
-  }
-  disconnect() { this.output.disconnect(); }
-  coef(b, spec, gain) { const c = rbj(spec.type, this.ctx.sampleRate, spec.freq, gain, spec.q); b.f.port.postMessage({ b: c.b, a: c.a }); }
-  build(spec, gain, g0) {
-    const ctx = this.ctx, iir = IIR_TYPES.has(spec.type), br = { iir, type: spec.type };
-    if (iir) { br.f = this.mk(ctx); this.coef(br, spec, gain); }
-    else { const f = br.f = ctx.createBiquadFilter(); f.type = spec.type; f.frequency.value = spec.freq; f.Q.value = spec.q || 0.71; f.gain.value = gain; }
-    br.g = ctx.createGain(); br.g.gain.value = g0;
-    this.input.connect(br.f); br.f.connect(br.g); br.g.connect(this.output);
-    return br;
-  }
-  set(spec, gain) {
-    this.want = [spec, gain];
-    if (this.timer) return;
-    this.flush();
-    this.timer = setTimeout(() => { this.timer = 0; if (this.want) this.flush(); }, COALESCE);
-  }
-  flush() {
-    const [spec, gain] = this.want; this.want = null;
-    const cur = this.branch, t = this.ctx.currentTime, iir = IIR_TYPES.has(spec.type);
-    if (iir && cur.iir) { this.coef(cur, spec, gain); return; }
-    if (!iir && !cur.iir && cur.type === spec.type) { // peaking etc.: AudioParams already glide
-      cur.f.frequency.setTargetAtTime(spec.freq, t, 0.01); cur.f.Q.setTargetAtTime(spec.q || 0.71, t, 0.01); cur.f.gain.setTargetAtTime(gain, t, 0.02);
-      return;
-    }
-    const nb = this.branch = this.build(spec, gain, 0);
-    nb.g.gain.setValueAtTime(0, t); nb.g.gain.linearRampToValueAtTime(1, t + FADE);
-    cur.g.gain.cancelScheduledValues(t); cur.g.gain.setValueAtTime(cur.g.gain.value, t); cur.g.gain.linearRampToValueAtTime(0, t + FADE);
-    this.dying.add(cur);
-    cur.timer = setTimeout(() => this.reap(cur), FADE * 1000 + 60);
-  }
-  reap(b) {
-    clearTimeout(b.timer);
-    if (!this.dying.delete(b)) return;
-    try { this.input.disconnect(b.f); } catch {}
-    b.f.disconnect(); b.g.disconnect();
-  }
-  dispose() {
-    clearTimeout(this.timer); this.want = null;
-    [...this.dying].forEach(b => this.reap(b));
-    this.input.disconnect(); this.output.disconnect();
-    try { this.input.disconnect(this.branch.f); } catch {}
-    this.branch.f.disconnect(); this.branch.g.disconnect();
-  }
-}
 
 export class Engine extends EventTarget {
   constructor(opts) {
@@ -133,47 +55,19 @@ export class Engine extends EventTarget {
     this.port = o.exclusive ? this.xoPort : this.node.port;
     if (o.exclusive) { await this.xoConfig(); ctx.suspend(); }
 
-    const g = () => ctx.createGain();
-    const bq = (type, freq, q) => {
-      const f = ctx.createBiquadFilter();
-      f.type = type; f.frequency.value = freq;
-      if (q) f.Q.value = q;
-      return f;
-    };
-    this.fader = g();
-    this.preamp = g();
-    this.bq = bq;
-    this.bass = new Slot(ctx, { type: 'lowshelf', freq: 90, q: 0.7 });
-    this.eqIn = g(); this.eqOut = g();
-    this.eq = [];
-    this.treble = new Slot(ctx, { type: 'highshelf', freq: 9000, q: 0.7 });
-    this.balance = ctx.createStereoPanner();
-    this.dry = g(); this.wet = g(); this.conv = ctx.createConvolver();
-    this.preDelay = ctx.createDelay(1); this.preTap = g(); this.wetFilter = bq('lowpass', 12000, 0.5);
-    this.limIn = g();
-    // look-ahead peak limiter (worklet.js): EQ boosts stay loud like in , only peaks above -0.3 dBFS are eased down
-    this.limiter = new AudioWorkletNode(ctx, 'cadence-limiter', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
-    this.tap = g();      // post-DSP, pre-volume: visualizers read from here
-    this.volume = g();   // volume sits before the limiter (like direct volume control)
-
-    const chain = [this.node, this.fader, this.preamp, this.eqIn];
-    chain.reduce((a, b) => (a.connect(b), b));
-    this.link();
-    this.balance.connect(this.dry).connect(this.limIn);
-    this.preDelay.connect(this.conv).connect(this.wetFilter); // fed from balance only while reverb is on
-    this.preDelay.connect(this.preTap).connect(this.wetFilter);
-    this.wetFilter.connect(this.wet).connect(this.limIn);
-    this.limIn.connect(this.tap);
-    this.limIn.connect(this.volume);
+    await ctx.audioWorklet.addModule('dsp.js');
+    this.fader = ctx.createGain();
+    // EQ, tone, balance, width, reverb, volume and the true-peak limiter: output 0 plays, output 1 (post-EQ, pre-volume) feeds
+    // the visualizers. Volume sits before the limiter (direct volume control)
+    this.dsp = new AudioWorkletNode(ctx, 'cadence-dsp', { numberOfInputs: 1, numberOfOutputs: 2, outputChannelCount: [2, 2], channelCount: 2, channelCountMode: 'explicit' });
+    this.dsp.port.onmessage = e => { if (e.data.latency != null) this.dspLatency = e.data.latency / ctx.sampleRate; };
+    this.dspLatency = 0;
+    this.tap = ctx.createGain();
+    this.node.connect(this.fader).connect(this.dsp).connect(ctx.destination);
+    this.dsp.connect(this.tap, 1);
 
     this.applyAll();
     this.emit('ready');
-  }
-
-  link() { // eqIn -> bands -> eqOut -> bass -> treble -> balance (bands/tone are click-free Slots)
-    this.linked?.forEach(n => n.disconnect());
-    this.linked = [this.eqIn, ...this.eq, this.eqOut, this.bass, this.treble];
-    [...this.linked, this.balance].reduce((a, b) => ((a.output || a).connect(b.input || b), b));
   }
 
   // ---------- settings ----------
@@ -185,6 +79,7 @@ export class Engine extends EventTarget {
     this.setWidth(o.width);
     this.setReverb(o.reverb);
     this.setMono(!!o.mono);
+    this.setCrossfeed(o.crossfeed);
     this.setGap(o.gap || 0);
     this.setLimiter(o.limiter);
     this.setVolume(o.volume);
@@ -194,76 +89,26 @@ export class Engine extends EventTarget {
   // bands: [{ type: 'peaking'|'lowshelf'|'highshelf'|'lowpass'|'highpass'|'notch', freq, gain, q }]
   setEq(on, bands, preamp) {
     Object.assign(this.o, { eqOn: on, eqBands: bands, preamp });
-    const t = this.ctx.currentTime;
-    const n0 = this.eq.length;
-    while (this.eq.length < bands.length) this.eq.push(new Slot(this.ctx, FLAT));
-    if (this.eq.length !== n0) this.link();
-    this.eq.forEach((f, i) => bands[i] ? f.set(bands[i], on ? bands[i].gain : 0) : f.set(FLAT, 0));
-    clearTimeout(this.trimTimer);
-    if (this.eq.length > bands.length) this.trimTimer = setTimeout(() => { // removed bands have faded to flat: drop them
-      const gone = this.eq.splice(this.o.eqBands.length);
-      this.link(); gone.forEach(f => f.dispose());
-    }, 200);
-    this.preamp.gain.setTargetAtTime(on ? dbToGain(preamp) : 1, t, 0.02);
     this.regain();
-    this.limiterBoost();
-    this.xoDsp();
+    this.syncDsp();
   }
   setTone(on, bass, treble, bassFreq = this.o.bassFreq || 90, trebleFreq = this.o.trebleFreq || 9000) {
     Object.assign(this.o, { toneOn: on, bass, treble, bassFreq, trebleFreq });
-    this.bass.set({ type: 'lowshelf', freq: bassFreq, q: 0.7 }, on ? bass : 0);
-    this.treble.set({ type: 'highshelf', freq: trebleFreq, q: 0.7 }, on ? treble : 0);
     this.regain();
-    this.limiterBoost();
-    this.xoDsp();
+    this.syncDsp();
   }
-  setBalance(v) { this.o.balance = v; this.balance.pan.setTargetAtTime(v, this.ctx.currentTime, 0.02); this.xoDsp(); }
-  setWidth(v) { this.o.width = v; if (!this.o.exclusive) this.port.postMessage({ type: 'width', value: v }); this.xoDsp(); }
+  setBalance(v) { this.o.balance = v; this.syncDsp(); }
+  setWidth(v) { this.o.width = v; this.syncDsp(); }
   // r: { on, size, damp, filter, fade, preDelay, preDelayMix, mix }
-  setReverb(r) {
-    this.o.reverb = r = { ...r };
-    const t = this.ctx.currentTime;
-    const irKey = [r.size, r.damp, r.fade].map(x => x.toFixed(3)).join();
-    if (r.on && this.irKey !== irKey) { this.conv.buffer = this.makeIR(r); this.irKey = irKey; }
-    this.preDelay.delayTime.setTargetAtTime(r.preDelay * 0.3, t, 0.02);
-    this.preTap.gain.setTargetAtTime(r.preDelayMix * 0.6, t, 0.02);
-    this.wetFilter.frequency.setTargetAtTime(800 + r.filter * r.filter * 19000, t, 0.02);
-    // the convolver is expensive even when silent: only feed it while reverb is on
-    if (r.on && !this.revLinked) { this.balance.connect(this.preDelay); this.revLinked = true; }
-    if (!r.on && this.revLinked) { try { this.balance.disconnect(this.preDelay); } catch {} this.revLinked = false; }
-    const m = r.on ? r.mix : 0;
-    this.wet.gain.setTargetAtTime(m, t, 0.03);
-    this.dry.gain.setTargetAtTime(1 - m * 0.45, t, 0.03);
-    this.xoDsp();
-  }
-  makeIR({ size, damp, fade }) {
-    const rate = this.ctx.sampleRate, len = Math.floor(rate * (0.25 + size * 5.5));
-    const decay = 6.5 - fade * 5; // higher fade = longer, flatter tail
-    const buf = this.ctx.createBuffer(2, len, rate);
-    for (let c = 0; c < 2; c++) {
-      const d = buf.getChannelData(c);
-      let lp = 0;
-      for (let i = 0; i < len; i++) {
-        const x = i / len;
-        const n = (Math.random() * 2 - 1) * Math.pow(1 - x, decay);
-        const k = 1 - Math.min(0.97, damp * x * 1.2); // high frequencies die faster
-        lp += (n - lp) * k;
-        d[i] = lp;
-      }
-    }
-    return buf;
-  }
-  setLimiter(on) {
-    this.o.limiter = on;
-    this.volume.disconnect(); this.limiter.disconnect();
-    if (on) this.volume.connect(this.limiter).connect(this.ctx.destination); else this.volume.connect(this.ctx.destination);
-    this.xoDsp();
-  }
+  setReverb(r) { this.o.reverb = { ...r }; this.syncDsp(); }
+  // ceiling: true-peak ceiling in dBTP (-1 or -0.3); guard: keep the true-peak stage on even when every other stage is off
+  setLimiter(on, ceiling = this.o.ceiling ?? -1, guard = !!this.o.guard) { Object.assign(this.o, { limiter: on, ceiling, guard }); this.syncDsp(); }
   setVolume(v) {
     v = clamp(v, 0, 1, 0);
-    // applied inside Cadence before the limiter, like direct volume control: below full volume the EQ boosts
+    // applied inside Cadence before the limiter (direct volume control): below full volume the EQ boosts
     // have room to be heard as boosts; the limiter only steps in near the top of the slider
-    this.o.volume = v; this.volume.gain.setTargetAtTime(v * v, this.ctx.currentTime, 0.015);
+    this.o.volume = v;
+    if (!this.o.exclusive) this.dsp.port.postMessage({ volume: v * v });
     if (this.o.exclusive) this.port.postMessage({ type: 'volume', value: v * v }); // < 100% scales samples: not bit-perfect
   }
   async deviceLabel() {
@@ -279,12 +124,6 @@ export class Engine extends EventTarget {
     this.regain();
   }
   regain() { for (const s of this.streams.values()) this.port.postMessage({ type: 'gain', id: s.id, gain: this.trackGain(s.track) }); }
-  // tell the limiter how much the EQ boosts each of its 10 octave bands, so a boosted band gives back its own boost first
-  limiterBoost() {
-    if (!this.limiter || !this.ctx) return;
-    const pre = this.o.eqOn ? this.o.preamp || 0 : 0, db = this.response([31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]);
-    this.limiter.port.postMessage({ boost: [...db].map(d => Math.pow(10, (d + pre) / 20)) });
-  }
   setTempoPitch(tempo, semitones) {
     tempo = clamp(tempo, 0.5, 2, 1); semitones = clamp(semitones, -12, 12, 0);
     if (tempo === this.o.tempo && semitones === this.o.semitones) return;
@@ -301,7 +140,6 @@ export class Engine extends EventTarget {
     const resume = this.cur && { entry: this.cur.entry, start: this.position, play: this.playing, quiet: true };
     this.stop();
     await this.ctx.close();
-    this.irKey = null; this.revLinked = false;
     await this.init();
     if (resume) this.load(resume.entry, resume);
   }
@@ -322,11 +160,27 @@ export class Engine extends EventTarget {
   async xoConfig() {
     this.port.postMessage({ type: 'config', device: await this.deviceLabel() }); // the helper matches the endpoint by name
   }
-  // the DSP settings as the helper reads them (DspConfig.Parse in native/dsp.cs); coalesced to one message per task
-  xoDsp() {
-    if (!this.o.exclusive || this.xoDspQueued) return;
-    this.xoDspQueued = true;
-    queueMicrotask(() => { this.xoDspQueued = false; if (this.o.exclusive) this.port.postMessage({ type: 'dsp', text: this.dspText() }); });
+  // the DSP settings to the exclusive helper or the shared-output worklet (both parse them as DspConfig); one message per task
+  syncDsp() {
+    if (this.dspQueued) return;
+    this.dspQueued = true;
+    queueMicrotask(() => {
+      this.dspQueued = false;
+      if (this.o.exclusive) this.port.postMessage({ type: 'dsp', text: this.dspText() });
+      else {
+        if (this.o.speakers && this.dsp) this.sendBrir();
+        this.dsp?.port.postMessage({ dsp: this.dspText() });
+      }
+    });
+  }
+  // the virtual speakers' responses at the context rate, loaded the first time they are turned on (the native helper embeds them)
+  async sendBrir() {
+    if (this.brirSent === this.dsp) return;
+    const node = this.brirSent = this.dsp;
+    try {
+      const h = brirFor(await (await fetch('brir.bin')).arrayBuffer(), this.ctx.sampleRate);
+      node.port.postMessage({ brir: h }, h.map(x => x.buffer));
+    } catch (e) { console.warn('virtual speakers:', e); this.brirSent = null; }
   }
   dspText() {
     const o = this.o, r = o.reverb || {}, n = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
@@ -334,7 +188,7 @@ export class Engine extends EventTarget {
       `pre ${o.eqOn ? n(o.preamp) : 0}`,
       ...(o.eqOn ? o.eqBands || [] : []).map(b => `band ${b.type} ${n(b.freq, 1000)} ${n(b.gain)} ${n(b.q, 0.71)}`),
       `bass ${o.toneOn ? n(o.bass) : 0} ${n(o.bassFreq, 90)}`, `treble ${o.toneOn ? n(o.treble) : 0} ${n(o.trebleFreq, 9000)}`,
-      `bal ${n(o.balance)}`, `width ${n(o.width, 1)}`, `mono ${o.mono ? 1 : 0}`, `lim ${o.limiter ? 1 : 0}`,
+      `bal ${n(o.balance)}`, `width ${n(o.width, 1)}`, `mono ${o.mono ? 1 : 0}`, `xfeed ${XFEED[o.crossfeed] || '0 700 4.5'}`, `spk ${o.speakers ? 1 : 0}`, `lim ${o.limiter ? 1 : 0}`, `ceil ${n(o.ceiling, -1)}`, `guard ${o.guard ? 1 : 0}`,
       `rev ${r.on ? 1 : 0} ${['size', 'damp', 'filter', 'fade', 'preDelay', 'preDelayMix', 'mix'].map(k => n(r[k])).join(' ')}`,
     ].join(';');
   }
@@ -384,15 +238,8 @@ export class Engine extends EventTarget {
     if (db == null) return dbToGain(clamp(o.noRgPreamp, -24, 24, 0));
     let gain = dbToGain(clamp(db, -24, 24, 0) + clamp(o.rgPreamp, -24, 24, 0));
     const peak = useAlbum ? rg.ap : rg.tp;
-    if (o.preventClip && peak > 0) gain = Math.min(gain, 1 / (peak * dbToGain(this.boostDb())));
+    if (o.preventClip && peak > 0) gain = Math.min(gain, 1 / peak); // the track's own peak: EQ boosts are the limiter's job
     return gain;
-  }
-  // worst-case positive gain the EQ / tone / preamp can add downstream of the per-stream gain
-  boostDb() {
-    const o = this.o;
-    const eq = o.eqOn ? (o.preamp || 0) + Math.max(0, ...(o.eqBands || []).map(b => b.gain || 0)) : 0;
-    const tone = o.toneOn ? Math.max(0, o.bass || 0, o.treble || 0) : 0;
-    return Math.max(0, eq + tone);
   }
 
   // ---------- streams ----------
@@ -616,7 +463,9 @@ export class Engine extends EventTarget {
     this.xfading = false;
     this.setPlaying(false);
   }
-  setMono(on) { this.o.mono = on; if (!this.o.exclusive) this.port.postMessage({ type: 'mono', value: on }); this.xoDsp(); }
+  setMono(on) { this.o.mono = on; this.syncDsp(); }
+  setCrossfeed(v) { this.o.crossfeed = v; this.syncDsp(); }
+  setSpeakers(on) { this.o.speakers = on; this.syncDsp(); }
   setGap(sec) { this.o.gap = sec; this.port.postMessage({ type: 'gap', frames: Math.round(sec * this.ctx.sampleRate) }); }
 
   get position() {
@@ -624,7 +473,7 @@ export class Engine extends EventTarget {
     if (!s) return 0;
     if (this.seekPos != null) return this.seekPos;
     const ctx = this.ctx;
-    const latency = this.o.exclusive ? 0 : (ctx.outputLatency || 0) + (ctx.baseLatency || 0); // the helper reports frames actually played
+    const latency = this.o.exclusive ? 0 : (ctx.outputLatency || 0) + (ctx.baseLatency || 0) + this.dspLatency; // the helper reports frames actually played
     const live = this.playing && s.at != null ? Math.min(this.now() - s.at, 0.25) : 0;
     return Math.max(s.start, s.start + (s.frames / s.rate + live - (this.playing ? latency : 0)) * s.tempo);
   }
@@ -636,25 +485,16 @@ export class Engine extends EventTarget {
   get track() { return this.cur?.track || null; }
   get entry() { return this.cur?.entry || null; }
 
-  // combined magnitude response (dB) of the EQ bands and tone shelves, for drawing the EQ curve.
-  // Preamp is a separate flat gain stage (as in ), so it isn't drawn into the curve.
+  // combined magnitude response (dB) of the EQ bands and tone shelves, for drawing the EQ curve: the DSP's own coefficients,
+  // from the target values, so the curve tracks the sliders exactly. Preamp is a separate flat gain stage.
   response(freqs) {
-    const f = new Float32Array(freqs), mag = new Float32Array(freqs.length), ph = new Float32Array(freqs.length);
-    const total = new Float32Array(freqs.length);
-    // computed from target values, not the ramping AudioParams, so the curve tracks the sliders exactly
+    const total = new Float32Array(freqs.length), fs = this.ctx.sampleRate, n = (v, d) => (Number.isFinite(+v) ? +v : d);
     const nodes = [];
     if (this.o.eqOn) nodes.push(...this.o.eqBands);
     if (this.o.toneOn) nodes.push({ type: 'lowshelf', freq: this.o.bassFreq || 90, gain: this.o.bass, q: 0.7 }, { type: 'highshelf', freq: this.o.trebleFreq || 9000, gain: this.o.treble, q: 0.7 });
-    const probe = this.probe ||= new OfflineAudioContext(1, 1, this.ctx.sampleRate).createBiquadFilter(), fs = this.ctx.sampleRate;
     for (const b of nodes) {
-      if (IIR_TYPES.has(b.type)) {
-        const c = rbj(b.type, fs, b.freq, b.gain, b.q);
-        for (let i = 0; i < f.length; i++) total[i] += iirDb(c, f[i], fs);
-        continue;
-      }
-      probe.type = b.type; probe.frequency.value = b.freq; probe.Q.value = b.q || 0.71; probe.gain.value = b.gain;
-      probe.getFrequencyResponse(f, mag, ph);
-      for (let i = 0; i < mag.length; i++) total[i] += 20 * Math.log10(mag[i] || 1e-6);
+      const k = biquadCoef(b.type, fs, n(b.freq, 1000), n(b.gain, 0), n(b.q, 0.71));
+      for (let i = 0; i < freqs.length; i++) total[i] += biquadDb(k, freqs[i], fs);
     }
     return total;
   }

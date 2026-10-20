@@ -104,3 +104,11 @@ assert.equal(linkOk('\\\\nas\\music\\a.flac'), true);
 assert.equal(linkOk('\\\\attacker\\music\\a.flac'), false);
 
 console.log('netpath ok');
+
+// AutoEq profile paths: no way out of results/, whichever separator or encoding
+{
+  const aeqPathOk = new Function(`${pick('aeqPathOk')}; return aeqPathOk;`)();
+  assert.ok(aeqPathOk('crinacle/711%20in-ear/1Custom%20SA02'));
+  for (const bad of ['../x', 'a/../b', 'a/..\\b', 'a\\..\\b', 'a/%2e%2e/b', 'a/%2E%2E%5Cb', 'a/%zz']) assert.equal(aeqPathOk(bad), false, bad);
+  console.log('ok   AutoEq paths: .. with / or \\, encoded or not, and bad escapes are refused');
+}

@@ -1,6 +1,7 @@
 // Boot, theming, OS integration, keyboard, phone import, backup.
 import { Engine } from './engine.js';
-import { h, $, icon, PATHS, debounce, fmtTime } from './util.js';
+import { h, $, icon, PATHS, debounce, fmtTime, setIconWeight } from './util.js';
+import { applyDesignStyles, startDesign } from './designs/index.js';
 import {
   S, set, hooks, setEngine, engine, stat, saveSettings, saveStats, savePlaylists, saveState, flushAll, buildIndex, makeEntries,
   peekNext, commit, allowXf, skipFadeSec, titleOf, artistOf, base, DEFAULTS,
@@ -53,10 +54,19 @@ export function applyTheme() {
   r.setProperty('--bg-sat', set.bgSaturation);
   r.setProperty('--bg-grad', (set.bgGradient / 8).toFixed(3));
   const bg = getComputedStyle(b).getPropertyValue('--bg').trim();
-  api.send('win:theme', { symbolColor: dark ? '#e8e8ee' : '#1b1b1f', bg });
+  api.send('win:theme', { symbolColor: dark ? '#e8e8ee' : '#1b1b1f', bg, material: set.windowMaterial });
   if (engine) import('./player.js').then(m => m.paintBackdrop());
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => set.theme === 'auto' && applyTheme());
+// the backdrop Windows actually applied (it falls back to none on older builds): the page turns see-through only then
+api.on('win:material', m => { for (const k of ['none', 'mica', 'acrylic']) document.body.classList.toggle('mat-' + k, k === m); });
+// designs load once at startup, so switching reloads the window and the session continues where it was
+export function switchDesign() {
+  sessionStorage.setItem('cadence:design-switch', JSON.stringify({ playing: !!engine?.playing, view: S.view?.name }));
+  flushAll();
+  document.body.classList.add('design-out');
+  setTimeout(() => location.reload(), set.animations === 'off' ? 0 : 200);
+}
 export function applyAccentFromArt() {
   const img = P.art?.querySelector('img:not(.leave)');
   import('./player.js').then(m => m.applyAccent(img || null));
@@ -81,7 +91,7 @@ export async function syncEngine() {
   const outChanged = (set.device || '') !== (o.device || '') || (set.sampleRate || 0) !== (o.sampleRate || 0);
   Object.assign(o, {
     eqOn: set.eqOn, eqBands: eqBands(), preamp: set.preamp, toneOn: set.toneOn, bass: set.bass, treble: set.treble, bassFreq: set.bassFreq, trebleFreq: set.trebleFreq,
-    limiter: set.limiter, reverb: set.reverb, rgMode: set.rgMode, mono: set.mono, width: set.width, balance: set.balance, volume: set.volume, gap: set.gap,
+    limiter: set.limiter, ceiling: set.ceiling, guard: set.guard, reverb: set.reverb, rgMode: set.rgMode, mono: set.mono, crossfeed: set.crossfeed, speakers: set.speakers, width: set.width, balance: set.balance, volume: set.volume, gap: set.gap,
   });
   if (outChanged) await engine.setOutput(set.device, set.sampleRate);
   if (!!set.exclusive !== !!o.exclusive) { engine.xoFallback = false; await engine.setExclusive(!!set.exclusive); }
@@ -336,14 +346,18 @@ async function boot() {
   S.playlists = cleanPlaylists(await api.invoke('store:get', 'playlists'));
   S.streams = cleanStreams(await api.invoke('store:get', 'streams'));
   S.bookmarks = cleanBookmarks(await api.invoke('store:get', 'bookmarks'));
-  const state = set.resume ? cleanState(await api.invoke('store:get', 'state')) : null;
+  // a design switch reloads the window: bring the session back even when "resume" is off
+  let switched = null; try { switched = JSON.parse(sessionStorage.getItem('cadence:design-switch')); } catch {}
+  sessionStorage.removeItem('cadence:design-switch');
+  const state = set.resume || switched ? cleanState(await api.invoke('store:get', 'state')) : null;
+  setIconWeight((await applyDesignStyles(set.design)).icons);
   applyTheme();
   if (api.beta) $('.brand').append(h('span', { class: 'brand-tag' }, 'Beta'));
 
   const eng = new Engine({
     sampleRate: set.sampleRate || 0, device: set.device, volume: set.volume, exclusive: !!set.exclusive,
     eqOn: set.eqOn, eqBands: eqBands(), preamp: set.preamp, toneOn: set.toneOn, bass: set.bass, treble: set.treble, bassFreq: set.bassFreq, trebleFreq: set.trebleFreq,
-    balance: set.balance, width: set.width, mono: set.mono, reverb: set.reverb, limiter: set.limiter, gap: set.gap,
+    balance: set.balance, width: set.width, mono: set.mono, crossfeed: set.crossfeed, speakers: set.speakers, reverb: set.reverb, limiter: set.limiter, ceiling: set.ceiling, guard: set.guard, gap: set.gap,
     crossfade: set.xfMode === 'none' ? 0 : set.crossfadeLen, skipFade: skipFadeSec(), fadePause: set.fadePause, seekFade: set.seekFade,
     rgMode: set.rgMode, rgPreamp: set.rgPreamp, noRgPreamp: set.noRgPreamp, preventClip: set.preventClip,
     tempo: set.tempo, semitones: set.semitones,
@@ -430,13 +444,16 @@ async function boot() {
     if (!cur && state.list?.[state.li]) cur = S.list.find(e => e.track.path === state.list[state.li]);
     S.li = cur ? S.list.indexOf(cur) : Math.min(Math.max(0, state.li || 0), S.list.length - 1);
     const e = cur || S.list[S.li];
-    if (e) eng.load(e, { start: e.track.path === state.cur ? state.pos || 0 : 0, play: false });
+    if (e) eng.load(e, { start: e.track.path === state.cur ? state.pos || 0 : 0, play: !!switched?.playing });
   }
   S.view = { name: 'songs' };
   render();
   updatePlayer();
   sendThumbar();
   watchDevices();
+  if (switched?.view && switched.view !== 'songs') try { go(switched.view); } catch {}
+  // the design's own scripts hook into the player and views built above; a broken one must not stop Cadence
+  startDesign(set.design, window.cadence).then(applyAccentFromArt).catch(e => console.error('design', e));
 
   $('#nav-back').append(icon('back', 'sm'));
   $('#nav-back').addEventListener('click', back);
@@ -461,7 +478,7 @@ async function boot() {
     const before = S.tracks.length;
     await loadLibrary();
     if (!['lyrics', 'eq', 'settings'].includes(S.view.name)) render();
-    // first run with an empty profile: bring phone data over automatically
+    // first run with an empty profile: bring the phone data over automatically
     if (!set.imported && S.tracks.length && !S.playlists.length && !Object.keys(S.stats).length) importPhone(false);
     else if (S.tracks.length !== before) toast(`Library updated: ${S.tracks.length} songs`);
     fetchArtistImages();

@@ -186,7 +186,7 @@ function viewHead({ cat, art, round, kicker, title, sub }) {
     cat ? catIcon(cat, 72) : art !== undefined ? (art ? h('img', { class: 'art' + (round ? ' round' : ''), src: artUrl(art, true), alt: '' }) : h('div', { class: 'art ph' + (round ? ' round' : '') }, icon(round ? 'artist' : 'album', 'lg'))) : null,
     h('div', { class: 'view-title' }, kicker ? h('div', { class: 'kicker' }, kicker) : null, h('h1', {}, title), sub ? h('div', { class: 'sub' }, sub) : null));
 }
-// header buttons: shuffle, play, filter (search in list), queue, plus extras
+// Header buttons: shuffle, play, filter (search in list), queue, plus extras
 function toolbar(tracks, ctx, { extra = [], onFilter } = {}) {
   const filter = onFilter ? h('input', { type: 'search', class: 'tb-filter', placeholder: 'Filter…', 'aria-label': 'Filter this list', oninput: e => onFilter(e.target.value) }) : null;
   if (!tracks().length) return h('div', { class: 'toolbar' }, ...extra);
@@ -408,12 +408,20 @@ export const VIEWS = {
   },
   lyrics: () => lyricsView(),
   nowplaying() {
-    const t = engine.track;
-    const left = h('div', { class: 'npv-left' },
-      t?.art ? h('img', { class: 'npv-art', src: artUrl(t.art, true), alt: '' }) : h('div', { class: 'npv-art ph' }, icon('song', 'xl')),
+    const t = engine.track, d = set.design;
+    let art = t?.art ? h('img', { class: 'npv-art', src: artUrl(t.art, true), alt: '' }) : h('div', { class: 'npv-art ph' }, icon('song', 'xl'));
+    // designs dress the cover differently; Classic keeps the bare image
+    if (d === 'cinema-press') art = h('div', { class: 'npv-frame' }, h('div', { class: 'fb t' }, h('span', {}, 'Now playing'), h('span', {}, t?.year ? String(t.year) : '')), art,
+      h('div', { class: 'fb b' }, h('span', {}, t ? (t.stream ? 'Live' : fmtQuality(t)) : ''), h('b', {}, t && !t.stream ? fmtTime(t.duration) : '')));
+    else if (d === 'two-ink') art = [t?.art ? h('div', { class: 'npv-art fb-art' }, h('img', { src: artUrl(t.art, true), alt: '', crossOrigin: 'anonymous' }), h('i', { class: 'fb-ht', 'aria-hidden': 'true' })) : art,
+      h('div', { class: 'fb-swatch', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'), h('i'))];
+    else if (d === 'alu-atelier') art = h('div', { class: 'npv-hero' }, h('i', { class: 'npv-disc', 'aria-hidden': 'true' }), art);
+    const ledger = (d === 'cinema-press' || d === 'two-ink') && t && !t.stream
+      ? h('dl', { class: 'npv-ledger' }, ...[['Album', t.album], ['Year', t.year], ['Genre', t.genre], ['Track', t.track ? String(t.track) : ''], ['Length', fmtTime(t.duration)]].filter(r => r[1]).flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, String(v))])) : null;
+    const left = h('div', { class: 'npv-left' }, art,
       h('div', { class: 'npv-title' }, t ? titleOf(t) : 'Nothing playing'),
       h('div', { class: 'npv-sub' }, t ? [artistOf(t), t.album].filter(Boolean).join(' — ') : ''),
-      t ? h('div', { class: 'npv-q' }, t.stream ? 'Live stream' : fmtQuality(t)) : null);
+      t ? h('div', { class: 'npv-q' }, t.stream ? 'Live stream' : fmtQuality(t)) : null, ledger);
     // the glow is a real element, not ::before: pseudo-element loops here run on the main thread every frame
     const v = h('section', { class: 'view npv' }, h('div', { class: 'npv-glow', 'aria-hidden': 'true' }), left, lyricsView());
     return v;

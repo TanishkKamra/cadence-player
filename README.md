@@ -1,12 +1,12 @@
 # Cadence
 
-A Windows music player modelled on feature set and look, written from scratch (no code or assets).
+A Windows music player with a full mobile-player feature set, written from scratch.
 
 Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Cadence-win32-x64\Cadence.exe`.
 
 ## What's in it
 
-**Playback engine**: ffmpeg decodes every format (FLAC up to 32-bit/384 kHz, ALAC, MP3, AAC, Opus, Vorbis, WAV/AIFF, APE, WavPack, DSD, WMA, …) to 32-bit float. The decoded audio runs through an AudioWorklet player and then the Web Audio DSP chain.
+**Playback engine**: ffmpeg decodes every format (FLAC up to 32-bit/384 kHz, ALAC, MP3, AAC, Opus, Vorbis, WAV/AIFF, APE, WavPack, DSD, WMA, …) to 32-bit float. Rate conversion uses the SoX resampler (libsoxr) at very high quality. The decoded audio runs through an AudioWorklet player and then the Web Audio DSP chain.
 - Sample-accurate gapless playback, crossfade (no fading / different albums only / all / shuffled only), and short or full crossfade on manual skips.
 - Fade on play/pause and seek, plus optional silence between tracks.
 - ReplayGain (track or album, with preamps and peak-based clip prevention), plus tempo (0.5–2×) and pitch (±12 semitones).
@@ -20,7 +20,8 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
   - Live spectrum behind the response curve, presets, your own saved presets, and presets bound to an output device.
   - 8,850 AutoEq headphone profiles.
 - Tone & Volume: bass and treble with their frequencies, balance, stereo expand, mono, tempo, pitch, volume.
-- Reverb: Size, Damp, Filter, Fade, Pre-Delay, Pre-Delay Mix, Mix, with the nine -named presets.
+- Reverb: Size, Damp, Filter, Fade, Pre-Delay, Pre-Delay Mix, Mix, with nine presets.
+- Headphones: crossfeed (bs2b, Chu Moy, Jan Meier presets) and virtual speakers (off by default).
 - Limiter, and an Audio Info panel showing the full signal chain (Ctrl+I).
 
 **Library**
@@ -28,7 +29,7 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
 - Smart lists: Queue, Bookmarks, Most Played, Top Rated, Low Rated, Recently Played, Recently Added, Long.
 - Watched folders with automatic incremental rescans.
 - Global search, a filter for each list, A–Z jump, grid or list view for each category, and categories you can hide.
-- queue: "Play next" and "Add to queue" play first, then the list continues.
+- Queue: "Play next" and "Add to queue" play first, then the list continues.
 - Shuffle modes (songs / categories / both, with a "less random" option), repeat list or song.
 - Ratings as thumbs or 5 stars, with play counts and "count as played after X %".
 - Long tracks remember their position.
@@ -42,7 +43,7 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
 - Click a line to seek, offset and size controls, and web search for anything missing.
 
 **Player and look**
-- layout: tinted, blurred album-art backdrop, accent colour taken from the cover, pill-shaped controls, 5-button transport (<<< and >>> jump albums, or seek ±10 s on long tracks), and a waveform seek bar.
+- Layout: tinted, blurred album-art backdrop, accent colour taken from the cover, pill-shaped controls, 5-button transport (<<< and >>> jump albums, or seek ±10 s on long tracks), and a waveform seek bar.
 - Immersive Now Playing view (click the cover, or press `P`).
 - Milkdrop visualizer (butterchurn) on the cover or full screen, with a preset browser where you can like or hide presets. Spectrum bars are also available.
 - Mini player (Ctrl+M), always on top.
@@ -60,20 +61,21 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
 
 **Migrated from your phone**: 10 playlists, play counts, likes, date-added, and your EQ (parametric Soft Bass, preamp, tone, limiter). Crossfade, ReplayGain, visualizer, background and library settings came across too. The data was captured over adb into `import/`.
 
-## Limitations and known differences from 
+## Limitations
 - **No bit-perfect or WASAPI-exclusive output.** Audio goes through Windows' shared mixer at 32-bit float. Web Audio can't take exclusive control of the device.
-- **Resampling quality differs.** SoX resampler isn't in the bundled ffmpeg, so a 64-tap windowed-sinc resampler is used instead.
 - **Phone-only features have no desktop version.** That covers Chromecast/DLNA, Android Auto, the lock screen and widgets. The mini player stands in for the widgets.
 - **Last.fm scrobbling isn't supported.** It needs an API key and secret registered by the user; ListenBrainz needs only a token.
 
 ## Development
 ```
-npm install
+npm install         # also fetches the ffmpeg build (libsoxr) into native/ffmpeg, checksum-verified
 npm start           # run from source
 npm test            # lyrics parser + queue self-checks
 npm run dist        # build release\Cadence-win32-x64\Cadence.exe
 ```
 User data (library cache, covers, settings, playlists, stats) lives in `%APPDATA%\Cadence`.
+
+Virtual speakers: room responses of the SADIE II database (subject D1, KU100 dummy head, speakers at ±45°), University of York, Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0), DOI 10.3390/app8112029. Modified for `renderer/brir.bin` by `tools/brir.py`: equalized flat, onset and tail trimmed, resampled.
 
 Design: Geist / Geist Mono typefaces (SIL OFL, `renderer/fonts`) and Phosphor Light icons (MIT, generated into `renderer/icons.js` from `@phosphor-icons/core`).
 
