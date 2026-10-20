@@ -186,7 +186,7 @@ function viewHead({ cat, art, round, kicker, title, sub }) {
     cat ? catIcon(cat, 72) : art !== undefined ? (art ? h('img', { class: 'art' + (round ? ' round' : ''), src: artUrl(art, true), alt: '' }) : h('div', { class: 'art ph' + (round ? ' round' : '') }, icon(round ? 'artist' : 'album', 'lg'))) : null,
     h('div', { class: 'view-title' }, kicker ? h('div', { class: 'kicker' }, kicker) : null, h('h1', {}, title), sub ? h('div', { class: 'sub' }, sub) : null));
 }
-// header buttons: shuffle, play, filter (search in list), queue, plus extras
+// Header buttons: shuffle, play, filter (search in list), queue, plus extras
 function toolbar(tracks, ctx, { extra = [], onFilter } = {}) {
   const filter = onFilter ? h('input', { type: 'search', class: 'tb-filter', placeholder: 'Filter…', 'aria-label': 'Filter this list', oninput: e => onFilter(e.target.value) }) : null;
   if (!tracks().length) return h('div', { class: 'toolbar' }, ...extra);

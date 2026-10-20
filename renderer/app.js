@@ -478,7 +478,7 @@ async function boot() {
     const before = S.tracks.length;
     await loadLibrary();
     if (!['lyrics', 'eq', 'settings'].includes(S.view.name)) render();
-    // first run with an empty profile: bring phone data over automatically
+    // first run with an empty profile: bring the phone data over automatically
     if (!set.imported && S.tracks.length && !S.playlists.length && !Object.keys(S.stats).length) importPhone(false);
     else if (S.tracks.length !== before) toast(`Library updated: ${S.tracks.length} songs`);
     fetchArtistImages();

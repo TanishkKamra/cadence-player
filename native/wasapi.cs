@@ -380,7 +380,7 @@ static class Wasapi {
   }
 
   // ---------- settings: DSP config, and the volume carried by the DAC's own hardware volume ----------
-  // Like direct volume control: the samples stay at full resolution and the DAC sets the level. EQ boosts are made
+  // Direct volume control: the samples stay at full resolution and the DAC sets the level. EQ boosts are made
   // room for digitally (-boost dB) and the DAC is turned up by the same amount, so the level of everything else stays put.
   static IAudioEndpointVolume ev; static bool hwVol, evTried; static float evMin, evMax, evInc, origDb = float.NaN, lastDac = float.NaN;
   static double pendDb = double.NaN, digital = 1; static long pendAt, lastPoll; static string lastDsp = "";

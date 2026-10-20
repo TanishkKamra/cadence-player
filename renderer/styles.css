@@ -78,7 +78,7 @@ body.no-blur .bg-layer { display: none; }
 .side-item .count { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .side-item .thumb { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; background: var(--surface-2); }
 
-/* category circle (colour per category, as in library) */
+/* category circle (colour per category) */
 .cat { display: grid; place-items: center; border-radius: 50%; background: var(--c, #5865f2); color: rgb(0 0 0 / .72); flex: none; }
 .cat .ic { fill: currentColor; }
 

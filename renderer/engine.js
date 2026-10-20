@@ -58,7 +58,7 @@ export class Engine extends EventTarget {
     await ctx.audioWorklet.addModule('dsp.js');
     this.fader = ctx.createGain();
     // EQ, tone, balance, width, reverb, volume and the true-peak limiter: output 0 plays, output 1 (post-EQ, pre-volume) feeds
-    // the visualizers. Volume sits before the limiter (like direct volume control)
+    // the visualizers. Volume sits before the limiter (direct volume control)
     this.dsp = new AudioWorkletNode(ctx, 'cadence-dsp', { numberOfInputs: 1, numberOfOutputs: 2, outputChannelCount: [2, 2], channelCount: 2, channelCountMode: 'explicit' });
     this.dsp.port.onmessage = e => { if (e.data.latency != null) this.dspLatency = e.data.latency / ctx.sampleRate; };
     this.dspLatency = 0;
@@ -105,7 +105,7 @@ export class Engine extends EventTarget {
   setLimiter(on, ceiling = this.o.ceiling ?? -1, guard = !!this.o.guard) { Object.assign(this.o, { limiter: on, ceiling, guard }); this.syncDsp(); }
   setVolume(v) {
     v = clamp(v, 0, 1, 0);
-    // applied inside Cadence before the limiter, like direct volume control: below full volume the EQ boosts
+    // applied inside Cadence before the limiter (direct volume control): below full volume the EQ boosts
     // have room to be heard as boosts; the limiter only steps in near the top of the slider
     this.o.volume = v;
     if (!this.o.exclusive) this.dsp.port.postMessage({ volume: v * v });
@@ -486,7 +486,7 @@ export class Engine extends EventTarget {
   get entry() { return this.cur?.entry || null; }
 
   // combined magnitude response (dB) of the EQ bands and tone shelves, for drawing the EQ curve: the DSP's own coefficients,
-  // from the target values, so the curve tracks the sliders exactly. Preamp is a separate flat gain stage (as in ).
+  // from the target values, so the curve tracks the sliders exactly. Preamp is a separate flat gain stage.
   response(freqs) {
     const total = new Float32Array(freqs.length), fs = this.ctx.sampleRate, n = (v, d) => (Number.isFinite(+v) ? +v : d);
     const nodes = [];

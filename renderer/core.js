@@ -323,7 +323,7 @@ export function moveInList(from, to) {
   S.li = S.list.indexOf(cur);
   engine?.invalidateNext();
 }
-// crossfade policy per transition (: no fading / non-gapless only / all songs / shuffled songs)
+// crossfade policy per transition (no fading / non-gapless only / all songs / shuffled songs)
 export function allowXf(a, b) {
   switch (set.xfMode) {
     case 'all': return true;

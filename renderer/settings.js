@@ -1,4 +1,4 @@
-// Settings screen (grouped like settings tree) with search.
+// Settings screen with search.
 import { h, icon, signed } from './util.js';
 import { S, set, engine, saveSettings, saveStats, skipFadeSec, allowXf, DEFAULTS } from './core.js';
 import { toggle, rangeInput, toast, confirm, dropdown } from './ui.js';
@@ -82,7 +82,7 @@ export function settingsView() {
       row('Don’t add duplicates to playlists', null, sw('noDuplicates')),
       row('Visible categories', set.hiddenCats.length ? `${set.hiddenCats.length} hidden. Right-click a category in the sidebar to hide it.` : 'Right-click a category in the sidebar to hide it.', btn('Show all', () => { set.hiddenCats = []; saveSettings(); render(); }))),
     group('Queue and shuffle',
-      row('Start playing the queue', 'queue: queued songs play, then the current list continues.', sel('queueStart', [['after', 'After the current song'], ['now', 'Immediately']])),
+      row('Start playing the queue', 'Queued songs play, then the current list continues.', sel('queueStart', [['after', 'After the current song'], ['now', 'Immediately']])),
       row('When the queue ends', null, sel('queueEnd', [['return', 'Return to the previous list'], ['stay', 'Repeat the queue']])),
       row('Shuffle mode', 'For lists made of several albums or folders.', sel('shuffleMode', [['songsCats', 'Shuffle songs and categories'], ['cats', 'Shuffle categories (keep album order)'], ['songs', 'Shuffle songs']])),
       row('Shuffle randomization', '“Less random” favours songs you have played less.', sel('shuffleRandom', [['full', 'Full random'], ['less', 'Less random']])),
