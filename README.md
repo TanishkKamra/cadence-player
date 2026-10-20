@@ -1,18 +1,12 @@
 # Cadence
 
-A Windows music player with a full mobile-player feature set, written from scratch.
+A desktop music player for Windows, written from scratch in Electron, JavaScript and C#.
 
-Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Cadence-win32-x64\Cadence.exe`.
-
-## What's in it
-
-**Playback engine**: ffmpeg decodes every format (FLAC up to 32-bit/384 kHz, ALAC, MP3, AAC, Opus, Vorbis, WAV/AIFF, APE, WavPack, DSD, WMA, …) to 32-bit float. Rate conversion uses the SoX resampler (libsoxr) at very high quality. The decoded audio runs through an AudioWorklet player and then the Web Audio DSP chain.
-- Sample-accurate gapless playback, crossfade (no fading / different albums only / all / shuffled only), and short or full crossfade on manual skips.
-- Fade on play/pause and seek, plus optional silence between tracks.
-- ReplayGain (track or album, with preamps and peak-based clip prevention), plus tempo (0.5–2×) and pitch (±12 semitones).
-- Output device selection and output sample rate (auto follows the device).
-- Internet radio (HTTP/HLS, `.m3u`/`.pls`) with ICY "now playing" titles.
-- CUE sheets: virtual tracks inside one big image file.
+**Playback engine**: ffmpeg decodes every common format (FLAC up to 32-bit/384 kHz, ALAC, MP3, AAC, Opus, Vorbis, WAV/AIFF, APE, WavPack, DSD, WMA) to 32-bit float, resampled with the SoX resampler (libsoxr). Audio plays through an AudioWorklet engine and a Web Audio DSP chain, or through a native C# helper that owns the device in **WASAPI exclusive mode** for bit-perfect output and runs the same DSP chain in 64-bit.
+- Sample-accurate gapless playback and crossfade (no fading / different albums only / all / shuffled only).
+- Fade on play/pause and seek, optional silence between tracks.
+- ReplayGain (track or album, with preamps and peak-based clip prevention), tempo (0.5–2×) and pitch (±12 semitones).
+- Output device and sample-rate selection, internet radio (HTTP/HLS, `.m3u`/`.pls`) with ICY titles, CUE sheets.
 
 **Equalizer screen** (three tabs):
 - Equalizer
@@ -21,7 +15,6 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
   - 8,850 AutoEq headphone profiles.
 - Tone & Volume: bass and treble with their frequencies, balance, stereo expand, mono, tempo, pitch, volume.
 - Reverb: Size, Damp, Filter, Fade, Pre-Delay, Pre-Delay Mix, Mix, with nine presets.
-- Headphones: crossfeed (bs2b, Chu Moy, Jan Meier presets) and virtual speakers (off by default).
 - Limiter, and an Audio Info panel showing the full signal chain (Ctrl+I).
 
 **Library**
@@ -59,24 +52,34 @@ Run it from the **Cadence** shortcut on the Desktop / Start Menu, or `release\Ca
 - ListenBrainz scrobbling.
 - Backup and restore of all settings and data.
 
-**Migrated from your phone**: 10 playlists, play counts, likes, date-added, and your EQ (parametric Soft Bass, preamp, tone, limiter). Crossfade, ReplayGain, visualizer, background and library settings came across too. The data was captured over adb into `import/`.
+## Tech
 
-## Limitations
-- **No bit-perfect or WASAPI-exclusive output.** Audio goes through Windows' shared mixer at 32-bit float. Web Audio can't take exclusive control of the device.
-- **Phone-only features have no desktop version.** That covers Chromecast/DLNA, Android Auto, the lock screen and widgets. The mini player stands in for the widgets.
-- **Last.fm scrobbling isn't supported.** It needs an API key and secret registered by the user; ListenBrainz needs only a token.
+| Part | What |
+|---|---|
+| `main.mjs` | Electron main process: ffmpeg decoder with flow control, library scanner, CUE, tags, art, lyrics, AutoEq |
+| `exclusive.mjs`, `native/wasapi.cs`, `native/dsp.cs` | WASAPI exclusive-mode output helper and its 64-bit DSP chain |
+| `renderer/engine.js`, `renderer/worklet.js` | Web Audio engine and AudioWorklet player |
+| `renderer/` | UI: library views, player, EQ, lyrics, settings |
+| `test/` | EQ, limiter, queue, lyrics, exclusive-mode and path-safety tests |
 
-## Development
+## Run it
+
+Needs Windows 10/11 and Node.js 22+.
+
 ```
-npm install         # also fetches the ffmpeg build (libsoxr) into native/ffmpeg, checksum-verified
-npm start           # run from source
-npm test            # lyrics parser + queue self-checks
-npm run dist        # build release\Cadence-win32-x64\Cadence.exe
+npm install          # also downloads ffmpeg
+npm start            # run from source
+npm test             # unit tests + native DSP self-test
+npm run dist         # build release\Cadence-win32-x64\Cadence.exe
 ```
+
 User data (library cache, covers, settings, playlists, stats) lives in `%APPDATA%\Cadence`.
 
-Virtual speakers: room responses of the SADIE II database (subject D1, KU100 dummy head, speakers at ±45°), University of York, Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0), DOI 10.3390/app8112029. Modified for `renderer/brir.bin` by `tools/brir.py`: equalized flat, onset and tail trimmed, resampled.
+## Known limits
 
-Design: Geist / Geist Mono typefaces (SIL OFL, `renderer/fonts`) and Phosphor Light icons (MIT, generated into `renderer/icons.js` from `@phosphor-icons/core`).
+- Phone-only features (Chromecast/DLNA, Android Auto, lock screen, widgets) have no desktop version; the mini player stands in for widgets.
+- Last.fm scrobbling isn't supported (ListenBrainz is).
 
-Code layout: `main.mjs` (ffmpeg decoder with flow control, scanner, CUE, tags, art, lyrics, AutoEq), `preload.cjs` (IPC allow-list), `renderer/` (`engine.js` + `worklet.js` audio engine, `core.js` state/queue, `views.js`, `player.js`, `eq.js`, `settings.js`, `lyricsview.js`, `actions.js`, `ui.js`, `app.js`).
+## License
+
+MIT, see [LICENSE](LICENSE). ffmpeg is downloaded at install time and keeps its own license. Geist fonts are SIL OFL; Phosphor icons are MIT.
