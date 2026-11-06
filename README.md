@@ -82,4 +82,4 @@ User data (library cache, covers, settings, playlists, stats) lives in `%APPDATA
 
 ## License
 
-MIT, see [LICENSE](LICENSE). ffmpeg is downloaded at install time and keeps its own license. Geist fonts are SIL OFL; Phosphor icons are MIT.
+All rights reserved, see [LICENSE](LICENSE). ffmpeg is downloaded at install time and keeps its own license. Geist fonts are SIL OFL; Phosphor icons are MIT.
