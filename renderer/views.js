@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-087e4d󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀸󠀷󠁥󠀴󠁤󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-087e4d󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀸󠀷󠁥󠀴󠁤󠁽
 // Sidebar, navigation and library views.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠄷󠅥󠄴󠅤󠇮
 import { h, $, icon, fmtTime, fmtLong, artUrl, splitNames, plural, fmtQualityShort, fmtQuality } from './util.js';
 import { S, set, engine, hooks, smartList, plTracks as plTracksRaw, saveSettings, savePlaylists, dirOf, base, searchMatch, titleOf, artistOf, streamTrack, fileOf } from './core.js';

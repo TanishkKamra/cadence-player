@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-6c4b65󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀶󠁣󠀴󠁢󠀶󠀵󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-6c4b65󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀶󠁣󠀴󠁢󠀶󠀵󠁽
 // Shared state, settings, persistence, library index and the play queue.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄶󠅣󠄴󠅢󠄶󠄵󠇮
 import { DESIGNS } from './designs/index.js';
 import { debounce, shuffleArr, splitNames, norm } from './util.js';

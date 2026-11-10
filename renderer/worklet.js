@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-08d88d󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀸󠁤󠀸󠀸󠁤󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-08d88d󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀸󠁤󠀸󠀸󠁤󠁽
 // PCM player: pulls interleaved f32 stereo chunks per stream, does gapless hand-off,󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠅤󠄸󠄸󠅤󠇮
 // equal-power crossfades and per-stream gain (ReplayGain). The DSP runs in dsp.js ('cadence-dsp').
 class Stream {

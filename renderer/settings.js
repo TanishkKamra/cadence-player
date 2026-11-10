@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1099ce󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀰󠀹󠀹󠁣󠁥󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1099ce󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀰󠀹󠀹󠁣󠁥󠁽
 // Settings screen with search.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄰󠄹󠄹󠅣󠅥󠇮
 import { h, icon, signed } from './util.js';
 import { S, set, engine, saveSettings, saveStats, skipFadeSec, allowXf, DEFAULTS } from './core.js';

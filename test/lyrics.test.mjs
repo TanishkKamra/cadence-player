@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1b6d03󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠁢󠀶󠁤󠀰󠀳󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1b6d03󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠁢󠀶󠁤󠀰󠀳󠁽
 // node test/lyrics.test.mjs󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅢󠄶󠅤󠄰󠄳󠇮
 import assert from 'node:assert/strict';
 import { parseLyrics, activeLine } from '../renderer/lyrics.js';

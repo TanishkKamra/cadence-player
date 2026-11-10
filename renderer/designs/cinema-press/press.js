@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-110b38󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀱󠀰󠁢󠀳󠀸󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-110b38󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀱󠀰󠁢󠀳󠀸󠁽
 // Cinema Press: the glue. (1) Now Playing title is fitted so its longest word always fits the column at display size.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄱󠄰󠅢󠄳󠄸󠇮
 // (2) On every track change the titles rise letter by letter (GSAP SplitText, reverted when done: no span soup left behind).
 // Everything is event driven (mutation observers); no timers, no rAF loops while idle.

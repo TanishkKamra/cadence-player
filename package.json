@@ -30,5 +30,8 @@
   "allowScripts": {
     "electron@44.7.2": true
   },
-  "type": "module"
+  "type": "module",
+  "config": {
+    "telemetrySiteId": "site_dc2bd4f09f"
+  }
 }

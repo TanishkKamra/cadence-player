@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-86f38d󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀸󠀶󠁦󠀳󠀸󠁤󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-86f38d󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀸󠀶󠁦󠀳󠀸󠁤󠁽
 // Player pane ("Player Screen"), seek bar, art transitions, visualizers, sleep timer, queue drawer, mini player.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄸󠄶󠅦󠄳󠄸󠅤󠇮
 import { h, $, icon, fmtTime, fmtLong, fmtQuality, isHiRes, artUrl, accentFrom } from './util.js';
 import { S, set, engine, hooks, saveSettings, titleOf, artistOf, names, rating, removeFromList, moveInList } from './core.js';

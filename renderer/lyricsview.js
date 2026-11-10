@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-a21461󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁡󠀲󠀱󠀴󠀶󠀱󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-a21461󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁡󠀲󠀱󠀴󠀶󠀱󠁽
 // Synced / word-level lyrics view.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠄲󠄱󠄴󠄶󠄱󠇮
 import { h, icon, fmtTime, artUrl, signed, fmtQuality } from './util.js';
 import { S, set, engine, saveSettings, titleOf, artistOf } from './core.js';

@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-baf7e7󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁢󠁡󠁦󠀷󠁥󠀷󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-baf7e7󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁢󠁡󠁦󠀷󠁥󠀷󠁽
 // Equalizer screen: Equalizer / Tone & Volume / Reverb tabs.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅡󠅦󠄷󠅥󠄷󠇮
 import { h, icon, debounce, signed } from './util.js';
 import { S, set, engine, saveSettings } from './core.js';

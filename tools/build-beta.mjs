@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-721150󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀷󠀲󠀱󠀱󠀵󠀰󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-721150󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀷󠀲󠀱󠀱󠀵󠀰󠁽
 // npm run dist:beta: packages the working tree as "Cadence Beta" into release-beta/, side by side with the main app.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄲󠄱󠄱󠄵󠄰󠇮
 // It keeps its own data folder (%APPDATA%\Cadence Beta), seeded once with a copy of the main app's library,
 // playlists, settings and cover cache; the main app's data is only read, never written.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄲󠄱󠄱󠄵󠄰󠇮

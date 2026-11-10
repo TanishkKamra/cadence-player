@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-c39662󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁣󠀳󠀹󠀶󠀶󠀲󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-c39662󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁣󠀳󠀹󠀶󠀶󠀲󠁽
 // Two-Ink Proof (fusion-b). Song -> three flat print inks + a tinted stock, the Pour (ink slabs), registration settle, press thump, masthead furniture.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅣󠄳󠄹󠄶󠄶󠄲󠇮
 // Nothing here loops: every function fires on a cover load, a theme change, a play/pause flip or a DOM insertion.
 // Colour-picking and the halftone raster descend from the Riso Print form (same author); the hue bins and dateline from Editorial Kinetic.

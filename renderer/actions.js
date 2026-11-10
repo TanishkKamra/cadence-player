@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-ec5838󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠁣󠀵󠀸󠀳󠀸󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-ec5838󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠁣󠀵󠀸󠀳󠀸󠁽
 // User actions: playing, queueing, rating, playlists, tags, album art, bookmarks, deleting.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠅣󠄵󠄸󠄳󠄸󠇮
 import { h, icon, fmtTime, fmtQuality, splitNames, plural } from './util.js';
 import {

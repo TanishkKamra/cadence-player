@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-39080f󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀹󠀰󠀸󠀰󠁦󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-39080f󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀹󠀰󠀸󠀰󠁦󠁽
 // LRC / enhanced-LRC parser. Returns { synced, lines: [{ t, text, words: [{t,text}] | null, end? }] }.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄹󠄰󠄸󠄰󠅦󠇮
 const STAMP = /\[(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)\]/g;
 const LEAD = /^(?:\s*\[(?:\d+:)?\d+:\d+(?:\.\d+)?\])+/;

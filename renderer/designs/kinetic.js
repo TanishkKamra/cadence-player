@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-7080a4󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀷󠀰󠀸󠀰󠁡󠀴󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-7080a4󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀷󠀰󠀸󠀰󠁡󠀴󠁽
 // Editorial Kinetic Type: lyric lines as typography that swells word by word in sync with the song.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄰󠄸󠄰󠅡󠄴󠇮
 // - every word is a fixed-width box (measured at the heaviest weight) so a weight morph never re-wraps the paragraph
 // - the active line animates the variable font's wght axis per word (--p 0..1), lifts, and takes the song's spot colour

@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-985f42󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠀸󠀵󠁦󠀴󠀲󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-985f42󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠀸󠀵󠁦󠀴󠀲󠁽
 // npm run ffmpeg (also postinstall and dist): fetches the decoder into native/ffmpeg/. ffmpeg-static's build has no󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠄸󠄵󠅦󠄴󠄲󠇮
 // libsoxr, so Cadence ships BtbN's LGPL Windows build (has --enable-libsoxr) pinned to one dated release.
 // Both the zip and the extracted ffmpeg.exe must match the SHA-256 below; anything else is deleted, never run.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠄸󠄵󠅦󠄴󠄲󠇮

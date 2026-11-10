@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e23873󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀲󠀳󠀸󠀷󠀳󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e23873󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀲󠀳󠀸󠀷󠀳󠁽
 // Exclusive (bit-perfect) output: ffmpeg s32le at the source rate -> native/cadence-wasapi.exe, which owns the󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄲󠄳󠄸󠄷󠄳󠇮
 // device in WASAPI exclusive mode. Speaks the worklet's message protocol, so renderer/engine.js drives both alike:
 // in 'open' 'gain' 'close' 'stop' 'play' 'queue' 'playing' 'volume' 'dsp' 'config';

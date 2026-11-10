@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-31047f󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀱󠀰󠀴󠀷󠁦󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-31047f󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀱󠀰󠀴󠀷󠁦󠁽
 // Boot, theming, OS integration, keyboard, phone import, backup.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄱󠄰󠄴󠄷󠅦󠇮
 import { Engine } from './engine.js';
 import { h, $, icon, PATHS, debounce, fmtTime, setIconWeight } from './util.js';

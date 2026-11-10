@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e462d3󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀴󠀶󠀲󠁤󠀳󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e462d3󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀴󠀶󠀲󠁤󠀳󠁽
 // Audio engine: ffmpeg (main process) -> worklet PCM player -> 64-bit DSP worklet (dsp.js, the same code as the exclusive󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄴󠄶󠄲󠅤󠄳󠇮
 // helper's native/dsp.cs) -> output device.
 import { biquadCoef, biquadDb, brirFor } from './dsp.js';

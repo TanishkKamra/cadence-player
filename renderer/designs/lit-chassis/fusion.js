@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-9e3b56󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠁥󠀳󠁢󠀵󠀶󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-9e3b56󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠁥󠀳󠁢󠀵󠀶󠁽
 // Fusion C "Lit Chassis": song palette -> lamp + inks, the Pour, level knob, power-on warm-up, phosphor rings.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅥󠄳󠅢󠄵󠄶󠇮
 // Idle is still: the only loop is the rings canvas, and only while audio plays AND the window is visible AND Now Playing is open
 // AND Settings > Live visuals is on (capped at one frame per 15.5 ms, i.e. at most 60 fps). Paused = one static paint.

@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-4f2b68󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀴󠁦󠀲󠁢󠀶󠀸󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-4f2b68󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀴󠁦󠀲󠁢󠀶󠀸󠁽
 // BLACK TITANIUM REFERENCE (metal-b): light model, cover matcap, volume ring, Now Playing instrument.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠅦󠄲󠅢󠄶󠄸󠇮
 // Nothing here runs while idle: pointer light is rAF-coalesced and stops with the pointer, the needle meter and the
 // seconds hand only tick while a track plays on the Now Playing view, everything else is event driven.

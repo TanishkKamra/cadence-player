@@ -1,4 +1,4 @@
-# (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-aa02f7󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁡󠁡󠀰󠀲󠁦󠀷󠁿
+# (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-aa02f7󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁡󠁡󠀰󠀲󠁦󠀷󠁽
 # python tools/brir.py <SADIE II D1.zip> renderer/brir.bin󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠅡󠄰󠄲󠅦󠄷󠇮
 # Virtual speakers: the SADIE II KU100 (subject D1) room responses for speakers at +-45 degrees (the nearest BRIR positions to a
 # stereo pair; BRIRs exist every 45 degrees), from the 96 kHz set (SADIE's 44.1 and 48 kHz sets carry far less sub-bass), stored at

@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-09ee3b󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀹󠁥󠁥󠀳󠁢󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-09ee3b󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀹󠁥󠁥󠀳󠁢󠁽
 // 64-bit DSP for shared (Web Audio) output: a line-for-line port of native/dsp.cs, so both outputs sound the same.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄹󠅥󠅥󠄳󠅢󠇮
 // Keep the two in sync: test/dsp.test.mjs checks they agree to 1e-9. Loaded as an AudioWorklet module ('cadence-dsp')
 // and imported by the tests.

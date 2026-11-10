@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-6f0b37󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀶󠁦󠀰󠁢󠀳󠀷󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-6f0b37󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀶󠁦󠀰󠁢󠀳󠀷󠁽
 import { ICONS as LIGHT } from './icons.js';
 import { ICONS as REGULAR } from './icons-regular.js';
 let P = LIGHT;

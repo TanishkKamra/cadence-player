@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-000aaf󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀰󠀰󠁡󠁡󠁦󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-000aaf󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀰󠀰󠁡󠁡󠁦󠁽
 import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, net, protocol, Notification, powerSaveBlocker, screen } from 'electron';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';

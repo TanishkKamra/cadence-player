@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-370a25󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀷󠀰󠁡󠀲󠀵󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-370a25󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀷󠀰󠁡󠀲󠀵󠁽
 // Wet Ink Cinema: song palette -> CSS roles, plus the "ink pour" reveal on track change.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄷󠄰󠅡󠄲󠄵󠇮
 // Idle = static layers. Only the pour animates (~1.3 s), then the old layer is removed.
 import { SPRING, motionOff } from '../../motion.js';

@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-45a107󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀴󠀵󠁡󠀱󠀰󠀷󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-45a107󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀴󠀵󠁡󠀱󠀰󠀷󠁽
 // Reusable widgets: menus, dialogs, toasts, sliders, knobs, the virtual track list and card grids.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠄵󠅡󠄱󠄰󠄷󠇮
 import { h, $, icon, fmtTime, fmtQuality, fmtQualityShort, isHiRes, artUrl, norm } from './util.js';
 import { S, set, engine, rating, titleOf, artistOf, plTracks } from './core.js';

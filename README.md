@@ -1,4 +1,4 @@
-<!-- (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-5ed58c󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀵󠁥󠁤󠀵󠀸󠁣󠁿 -->
+<!-- (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-5ed58c󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀵󠁥󠁤󠀵󠀸󠁣󠁽 -->
 # Cadence
 
 A desktop music player for Windows, written from scratch in Electron, JavaScript and C#.
@@ -85,4 +85,4 @@ User data (library cache, covers, settings, playlists, stats) lives in `%APPDATA
 
 All rights reserved, see [LICENSE](LICENSE). ffmpeg is downloaded at install time and keeps its own license. Geist fonts are SIL OFL; Phosphor icons are MIT.
 
-Provenance ID `tkp-51ab3656c2-5ed58c`: every file carries a registered, traceable marker.󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀵󠁥󠁤󠀵󠀸󠁣󠁿
+Provenance ID `tkp-51ab3656c2-5ed58c`: every file carries a registered, traceable marker.󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀵󠁥󠁤󠀵󠀸󠁣󠁽

@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-9bc850󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠁢󠁣󠀸󠀵󠀰󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-9bc850󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠁢󠁣󠀸󠀵󠀰󠁽
 // Spring motion on live elements. Springs are simulated once and baked into CSS linear() easings,󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅢󠅣󠄸󠄵󠄰󠇮
 // so every animation runs on the compositor (transform/opacity only) and the page stays clickable.
 // Retargeting reads where an element visually is right now and springs from there: no snapshots, no jumps.

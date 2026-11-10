@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-bc122f󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁢󠁣󠀱󠀲󠀲󠁦󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-bc122f󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁢󠁣󠀱󠀲󠀲󠁦󠁽
 // node test/netpath.test.mjs — UNC/device path guard from main.mjs (main imports electron, so the helpers are lifted out of its source)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅣󠄱󠄲󠄲󠅦󠇮
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

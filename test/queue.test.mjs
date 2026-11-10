@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1c4db7󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠁣󠀴󠁤󠁢󠀷󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1c4db7󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠁣󠀴󠁤󠁢󠀷󠁽
 // node test/queue.test.mjs — queue: user Queue plays first, then the list continues󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅣󠄴󠅤󠅢󠄷󠇮
 import assert from 'node:assert/strict';
 import { S, set, setList, enqueue, peekNext, commit, prevEntry, setShuffle, removeFromList, allowXf } from '../renderer/core.js';

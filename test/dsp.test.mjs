@@ -1,4 +1,4 @@
-// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-0dd0c7󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠁤󠁤󠀰󠁣󠀷󠁿
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-0dd0c7󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠁤󠁤󠀰󠁣󠀷󠁽
 // node test/dsp.test.mjs — renderer/dsp.js (shared output) against native/dsp.cs (exclusive output), and the worklet around it.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠅤󠅤󠄰󠅣󠄷󠇮
 // Needs native/cadence-wasapi.exe (npm run build:native).
 import assert from 'node:assert/strict';
