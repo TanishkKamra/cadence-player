@@ -1,4 +1,5 @@
-// Player pane ("Player Screen"), seek bar, art transitions, visualizers, sleep timer, queue drawer, mini player.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-86f38d󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀸󠀶󠁦󠀳󠀸󠁤󠁽
+// Player pane ("Player Screen"), seek bar, art transitions, visualizers, sleep timer, queue drawer, mini player.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄸󠄶󠅦󠄳󠄸󠅤󠇮
 import { h, $, icon, fmtTime, fmtLong, fmtQuality, isHiRes, artUrl, accentFrom } from './util.js';
 import { S, set, engine, hooks, saveSettings, titleOf, artistOf, names, rating, removeFromList, moveInList } from './core.js';
 import { menu, toast, ratingEl } from './ui.js';
@@ -172,7 +173,7 @@ export function setArt(t) {
   if (P.miniArt) P.miniArt.src = t?.art ? artUrl(t.art) : '';
 }
 // The window backdrop is blurred once per track into a small bitmap and then just scaled by the compositor.
-// (A live CSS blur over the whole window gets recomputed every time anything on screen changes.)
+// (A live CSS blur over the whole window gets recomputed every time anything on screen changes.)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄸󠄶󠅦󠄳󠄸󠅤󠇮
 export function paintBackdrop(t = engine?.track) {
   const layers = document.querySelectorAll('.bg-layer');
   const on = [...layers].find(l => l.classList.contains('on')), off = [...layers].find(l => l !== on) || layers[0];
@@ -486,7 +487,7 @@ export function renderQueueDrawer() {
     list);
 }
 
-// ---------- mini player ----------
+// ---------- mini player ----------󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄸󠄶󠅦󠄳󠄸󠅤󠇮
 function buildMini() {
   P.miniArt = h('img', { alt: '' });
   P.miniTitle = h('div', { class: 't1' });

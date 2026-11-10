@@ -1,6 +1,7 @@
-// npm run dist:beta: packages the working tree as "Cadence Beta" into release-beta/, side by side with the main app.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-721150󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀷󠀲󠀱󠀱󠀵󠀰󠁽
+// npm run dist:beta: packages the working tree as "Cadence Beta" into release-beta/, side by side with the main app.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄲󠄱󠄱󠄵󠄰󠇮
 // It keeps its own data folder (%APPDATA%\Cadence Beta), seeded once with a copy of the main app's library,
-// playlists, settings and cover cache; the main app's data is only read, never written.
+// playlists, settings and cover cache; the main app's data is only read, never written.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄲󠄱󠄱󠄵󠄰󠇮
 import fs from 'node:fs';
 import path from 'node:path';
 import { packager, defaultSanitizePackageJson } from '@electron/packager';
@@ -11,7 +12,7 @@ const [appPath] = await packager({
   out: path.join(root, 'release-beta'), overwrite: true, appCopyright: 'Cadence',
   asar: { unpack: '**/{native/ffmpeg/ffmpeg.exe,native/cadence-wasapi.exe}' },
   ignore: /^\/(test|release|release-beta|dist|tools|scratch|import|[.]git|[.]vscode)(\/|$)|^\/(README[.]md|package-lock[.]json|[.]gitignore)$|^\/native\/[^/]+[.]cs$|[.](log|bak|bad|tmp|map)$/,
-  // the product name decides the data folder (app.getPath('userData')) and the single-instance lock
+  // the product name decides the data folder (app.getPath('userData')) and the single-instance lock󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄲󠄱󠄱󠄵󠄰󠇮
   sanitizePackageJson: [defaultSanitizePackageJson, pj => ({ ...pj, name: 'cadence-beta', productName: 'Cadence Beta' })],
 });
 console.log('built', appPath);

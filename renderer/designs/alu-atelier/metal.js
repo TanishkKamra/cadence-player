@@ -1,4 +1,5 @@
-// Alu Atelier: material layer. Everything here is on demand (pointer move, track change, state change); nothing loops while idle.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e2c4af󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀲󠁣󠀴󠁡󠁦󠁽
+// Alu Atelier: material layer. Everything here is on demand (pointer move, track change, state change); nothing loops while idle.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄲󠅣󠄴󠅡󠅦󠇮
 import { artUrl } from '../../util.js';
 
 const root = document.documentElement;
@@ -85,7 +86,7 @@ function paintEnv(img) {
   g.fillStyle = '#7d848e'; g.fillRect(0, 0, N, N);
   if (img) { g.filter = 'blur(9px) saturate(1.25)'; g.drawImage(img, -N * .2, -N * .2, N * 1.4, N * 1.4); g.filter = 'none'; }
   const v = (stops, w) => { const q = g.createLinearGradient(0, 0, 0, N); stops.forEach(([o, col]) => q.addColorStop(o, col)); g.fillStyle = q; g.fillRect(0, 0, N, N); };
-  // sky softbox, razor horizon, dim ground with a bounce light
+  // sky softbox, razor horizon, dim ground with a bounce light󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄲󠅣󠄴󠅡󠅦󠇮
   v([[0, 'rgba(255,255,255,.80)'], [.14, 'rgba(255,255,255,.62)'], [.34, 'rgba(235,240,248,.22)'], [.47, 'rgba(10,12,16,.30)'], [.5, 'rgba(6,8,10,.72)'], [.54, 'rgba(8,10,12,.52)'], [.78, 'rgba(10,12,16,.30)'], [1, 'rgba(230,235,245,.40)']]);
   const s = g.createLinearGradient(0, 0, N, 0); // vertical strip light
   s.addColorStop(0, 'rgba(255,255,255,0)'); s.addColorStop(.2, 'rgba(255,255,255,.0)'); s.addColorStop(.26, 'rgba(255,255,255,.55)'); s.addColorStop(.33, 'rgba(255,255,255,0)'); s.addColorStop(1, 'rgba(255,255,255,0)');

@@ -1,6 +1,7 @@
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-d7ec2c󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁤󠀷󠁥󠁣󠀲󠁣󠁽
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
-// Only these channels are reachable from the page.
+// Only these channels are reachable from the page.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅤󠄷󠅥󠅣󠄲󠅣󠇮
 const INVOKE = new Set(['store:get', 'library:get', 'library:addFolder', 'library:removeFolder', 'library:rescan', 'track:info',
   'playlist:import', 'playlist:export', 'playlist:readFile', 'import:phone', 'waveform', 'lyrics:get', 'dialog:openFiles', 'app:args',
   'tags:write', 'file:trash', 'art:pick', 'art:fetch', 'art:cleanup', 'art:artists', 'autoeq:index', 'autoeq:get', 'backup:export', 'backup:import',

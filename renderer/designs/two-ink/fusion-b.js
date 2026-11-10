@@ -1,4 +1,5 @@
-// Two-Ink Proof (fusion-b). Song -> three flat print inks + a tinted stock, the Pour (ink slabs), registration settle, press thump, masthead furniture.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-c39662󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁣󠀳󠀹󠀶󠀶󠀲󠁽
+// Two-Ink Proof (fusion-b). Song -> three flat print inks + a tinted stock, the Pour (ink slabs), registration settle, press thump, masthead furniture.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅣󠄳󠄹󠄶󠄶󠄲󠇮
 // Nothing here loops: every function fires on a cover load, a theme change, a play/pause flip or a DOM insertion.
 // Colour-picking and the halftone raster descend from the Riso Print form (same author); the hue bins and dateline from Editorial Kinetic.
 import { SPRING, motionOff } from '../../motion.js';
@@ -105,7 +106,7 @@ function setStock(p, instant) {
   if (instant) setTimeout(() => root.classList.remove('fb-nt'), 60);
 }
 
-// ---------- halftone plates (hero cover only) ----------
+// ---------- halftone plates (hero cover only) ----------󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅣󠄳󠄹󠄶󠄶󠄲󠇮
 function halftone(px, W, ang, cell, cover, rgb) {
   const S = 480, c = new OffscreenCanvas(S, S), g = c.getContext('2d');
   g.fillStyle = `rgb(${rgb.join(',')})`;
@@ -242,7 +243,7 @@ new MutationObserver(() => {
   k.animate([{ transform: 'none' }, { transform: 'translate(3px,3px)', offset: .22 }, { transform: 'none' }], { duration: 360, easing: SPRING.snappy.easing });
 }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-// ---------- masthead dateline on page headers ----------
+// ---------- masthead dateline on page headers ----------󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅣󠄳󠄹󠄶󠄶󠄲󠇮
 function dress(h1) {
   const n = h1.textContent.length;
   h1.dataset.len = n > 34 ? 'xl' : n > 20 ? 'l' : n > 11 ? 'm' : 's';

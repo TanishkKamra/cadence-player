@@ -1,3 +1,4 @@
+/* (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e24fac󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀲󠀴󠁦󠁡󠁣󠁽 */
 /* ================================================================ TWO-INK PROOF (fusion-b)
    Soul: a proof pulled off a two-drum press. The cover supplies two flat inks (+ a spot); everything coloured is one of them;
    depth is a hard under-print offset (--rx/--ry), never a blur; every track change pulls a fresh sheet and the plates spring into register.
@@ -501,3 +502,4 @@ html:root.calm body.fb :is(.view-head .fb-folio b, .npv-q, .view-head .view-titl
   html:root body.fb * { animation: none !important; transition-duration: .01ms !important; }
   .fb-pour { display: none; }
 }
+:root { --build-id: "tkp-51ab3656c2-e24fac"; }

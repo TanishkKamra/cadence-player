@@ -1,4 +1,5 @@
-// node test/netpath.test.mjs — UNC/device path guard from main.mjs (main imports electron, so the helpers are lifted out of its source)
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-bc122f󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁢󠁣󠀱󠀲󠀲󠁦󠁽
+// node test/netpath.test.mjs — UNC/device path guard from main.mjs (main imports electron, so the helpers are lifted out of its source)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅣󠄱󠄲󠄲󠅦󠇮
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import nodePath from 'node:path';
@@ -35,7 +36,7 @@ for (const f of ['\\??\\UNC\\attacker\\music\\a.flac', '\\\\?\\UNC\\attacker\\s\
 for (const f of ['\\\\.\\UNC\\nas\\music\\..\\..\\attacker\\s\\x.flac', '\\\\?\\UNC\\nas\\music\\..\\x.flac', '\\??\\UNC\\nas\\music\\.\\a.flac', '//./UNC/nas/music/../../attacker/s'])
   assert.equal(netOk(f, share), false, f);
 assert.equal(netOk('\\\\nas\\music\\..\\x.flac', share), true); // a plain UNC root cannot be climbed out of, here Windows and Node agree
-// long forms of a local drive path are local
+// long forms of a local drive path are local󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅣󠄱󠄲󠄲󠅦󠇮
 assert.equal(netOk('\\\\?\\C:\\x.flac', local), true);
 assert.equal(netOk('\\??\\D:\\Lossless music\\a.flac', local), true);
 
@@ -105,7 +106,7 @@ assert.equal(linkOk('\\\\attacker\\music\\a.flac'), false);
 
 console.log('netpath ok');
 
-// AutoEq profile paths: no way out of results/, whichever separator or encoding
+// AutoEq profile paths: no way out of results/, whichever separator or encoding󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅣󠄱󠄲󠄲󠅦󠇮
 {
   const aeqPathOk = new Function(`${pick('aeqPathOk')}; return aeqPathOk;`)();
   assert.ok(aeqPathOk('crinacle/711%20in-ear/1Custom%20SA02'));

@@ -1,4 +1,5 @@
-// Designs: whole-app looks layered over styles.css. Only the active one is loaded, at startup;
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-edccfc󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠁤󠁣󠁣󠁦󠁣󠁽
+// Designs: whole-app looks layered over styles.css. Only the active one is loaded, at startup;󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠅤󠅣󠅣󠅦󠅣󠇮
 // switching reloads the window (playback resumes where it was).
 export const DESIGNS = {
   classic: { label: 'Classic' },
@@ -17,7 +18,7 @@ const load = (tag, attrs) => new Promise(res => {
   document.head.append(el);
 });
 
-// before the first render: classes, icon weight and stylesheets (awaited, so the window never shows the wrong look)
+// before the first render: classes, icon weight and stylesheets (awaited, so the window never shows the wrong look)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠅤󠅣󠅣󠅦󠅣󠇮
 export async function applyDesignStyles(key) {
   const d = designOf(key);
   document.body.classList.add(...(d.body || []));
@@ -27,7 +28,7 @@ export async function applyDesignStyles(key) {
   return d;
 }
 
-// after the player and the first view exist: the design's scripts (they hook into that DOM)
+// after the player and the first view exist: the design's scripts (they hook into that DOM)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠅤󠅣󠅣󠅦󠅣󠇮
 export async function startDesign(key, cadence) {
   const d = designOf(key);
   if (d.gsap) for (const f of ['gsap.min.js', 'SplitText.min.js']) await load('script', { src: `app://mod/gsap/dist/${f}` });

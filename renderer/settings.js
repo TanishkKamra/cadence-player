@@ -1,4 +1,5 @@
-// Settings screen with search.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1099ce󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀰󠀹󠀹󠁣󠁥󠁽
+// Settings screen with search.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄰󠄹󠄹󠅣󠅥󠇮
 import { h, icon, signed } from './util.js';
 import { S, set, engine, saveSettings, saveStats, skipFadeSec, allowXf, DEFAULTS } from './core.js';
 import { toggle, rangeInput, toast, confirm, dropdown } from './ui.js';
@@ -22,7 +23,7 @@ export function settingsView() {
   const row = (title, desc, ctl) => {
     const r = h('div', { class: 'set-row', dataset: { q: (title + ' ' + (desc || '')).toLowerCase() } },
       h('div', { class: 'txt' }, h('b', {}, title), desc ? h('span', {}, desc) : null), h('div', { class: 'ctl' }, ctl));
-    // controls are built labelled with their setting key: the row title is the accessible name
+    // controls are built labelled with their setting key: the row title is the accessible name󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄰󠄹󠄹󠅣󠅥󠇮
     r.querySelectorAll('[aria-label]').forEach(c => { if (Object.hasOwn(set, c.getAttribute('aria-label'))) c.setAttribute('aria-label', title); });
     return r;
   };
@@ -32,7 +33,7 @@ export function settingsView() {
     const o = h('output', {}, fmt(set[key]));
     return [rangeInput({ min, max, step, value: set[key], label: key, onInput: v => { set[key] = v; o.textContent = fmt(v); saveSettings(); after(v); }, onChange: commit }), o];
   };
-  // in-app colour choice instead of the OS colour dialog; a custom colour already in use stays as the first swatch
+  // in-app colour choice instead of the OS colour dialog; a custom colour already in use stays as the first swatch󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄰󠄹󠄹󠅣󠅥󠇮
   const ACCENTS = ['#ff8a3d', '#ff5d73', '#e85fd0', '#a77bff', '#6c8cff', '#3fb6ff', '#2fd3c0', '#4fd27a', '#c6e05a', '#ffd24a', '#e8e4dc'];
   const accentSwatches = () => {
     const wrap = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Accent colour' });

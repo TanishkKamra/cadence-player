@@ -1,3 +1,4 @@
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-d7757a󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁤󠀷󠀷󠀵󠀷󠁡󠁽
 // cadence-wasapi: plays s32le stereo PCM from stdin through WASAPI exclusive mode (bit-perfect at gain 1).
 // Built with the .NET Framework csc.exe that ships with Windows (C# 5): see "build:native" in package.json.
 //

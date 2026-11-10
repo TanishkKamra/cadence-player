@@ -1,3 +1,4 @@
+/* (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-d8e37d󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁤󠀸󠁥󠀳󠀷󠁤󠁽 */
 /* ==========================================================================================================
    FUSION C: LIT CHASSIS. Loaded after styles.css, scoped to body.fc (index.html), colours from fusion.js.
    Soul: a lit instrument that wears the song. Four materials only: GROUND, PLATE, KEY, WELL. No glass, no chrome, no wood.
@@ -426,3 +427,4 @@ body.fc[data-theme][data-theme] :is(.times .chip:not(.ctx), .view-title .sub, #m
   background-image: radial-gradient(circle at 50% 50%, rgb(var(--lcd)) 0 .9px, rgb(var(--lcd) / 0) 1.35px), linear-gradient(var(--lcd-well), var(--lcd-well));
   background-size: 2.6px 2.6px, auto; background-clip: text, padding-box; -webkit-background-clip: text, padding-box; }
 body.fc[data-theme][data-theme] :is(.view-title .sub, #mini .fc-mt) { background-size: 2.3px 2.3px, auto; }
+:root { --build-id: "tkp-51ab3656c2-d8e37d"; }

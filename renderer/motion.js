@@ -1,4 +1,5 @@
-// Spring motion on live elements. Springs are simulated once and baked into CSS linear() easings,
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-9bc850󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠁢󠁣󠀸󠀵󠀰󠁽
+// Spring motion on live elements. Springs are simulated once and baked into CSS linear() easings,󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅢󠅣󠄸󠄵󠄰󠇮
 // so every animation runs on the compositor (transform/opacity only) and the page stays clickable.
 // Retargeting reads where an element visually is right now and springs from there: no snapshots, no jumps.
 
@@ -32,7 +33,7 @@ const off = () => document.body.classList.contains('anim-off') || matchMedia('(p
 const scale = () => (document.body.classList.contains('anim-fast') ? 0.6 : 1);
 export const motionOff = off;
 
-// animate el between keyframes with a spring (or a plain duration/easing); returns the Animation or null
+// animate el between keyframes with a spring (or a plain duration/easing); returns the Animation or null󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅢󠅣󠄸󠄵󠄰󠇮
 export function spring(el, keyframes, kind = 'smooth', extra = {}) {
   if (off()) return null;
   const s = typeof kind === 'string' ? SPRING[kind] : kind;
@@ -45,7 +46,7 @@ export function fade(el, keyframes, duration, extra = {}) {
 
 // Move el (already at its final layout spot) so it appears to travel from rect `from` to where it is now.
 // `from` should be read with getBoundingClientRect() before the layout change: it includes any running
-// animation, so a flip started mid-flight continues from exactly where the element was drawn.
+// animation, so a flip started mid-flight continues from exactly where the element was drawn.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅢󠅣󠄸󠄵󠄰󠇮
 export function flip(el, from, kind = 'glide') {
   el.getAnimations().forEach(a => a.cancel());
   const to = el.getBoundingClientRect();

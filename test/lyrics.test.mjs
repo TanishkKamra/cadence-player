@@ -1,4 +1,5 @@
-// node test/lyrics.test.mjs
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1b6d03󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠁢󠀶󠁤󠀰󠀳󠁽
+// node test/lyrics.test.mjs󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅢󠄶󠅤󠄰󠄳󠇮
 import assert from 'node:assert/strict';
 import { parseLyrics, activeLine } from '../renderer/lyrics.js';
 
@@ -24,7 +25,7 @@ const flat = parseLyrics({ text: '[00:00.00]a\n[00:00.00]b\n[00:00.00]c' });
 assert.equal(flat.synced, false);
 assert.deepEqual(flat.lines.map(l => l.text), ['a', 'b', 'c']);
 assert.equal(parseLyrics({ synced: [{ t: 0, text: 'a' }, { t: 0, text: 'b' }] }).synced, false);
-// BOM before [offset:], CR-only and CRLF line endings
+// BOM before [offset:], CR-only and CRLF line endings󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅢󠄶󠅤󠄰󠄳󠇮
 const bom = parseLyrics({ text: '﻿[offset:+500]\r[00:01.00]a\r[00:02.00]b\r' });
 assert.deepEqual(bom.lines.map(l => [l.t, l.text]), [[0.5, 'a'], [1.5, 'b']]);
 assert.equal(parseLyrics({ text: '[00:01.00]a\r\n[00:02.00]b\r\n' }).lines.length, 2);
@@ -35,7 +36,7 @@ assert.equal(parseLyrics({ text: '[00:01:50]a' }).lines[0].t, 1.5);
 const w = parseLyrics({ text: '[00:01.00]<00:01.00>a <00:01.50>b<00:02.00>' }).lines[0];
 assert.equal(w.end, 2); assert.deepEqual(w.words.map(x => x.text), ['a ', 'b']);
 assert.equal(parseLyrics({ text: '[00:01.00]<00:01.00>a <00:xx>b <00:02.00' }).lines[0].text, 'a b');
-// [Intro:] style headers stay as plain text; ID tags are dropped; mid-line [12:30] is not a stamp
+// [Intro:] style headers stay as plain text; ID tags are dropped; mid-line [12:30] is not a stamp󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅢󠄶󠅤󠄰󠄳󠇮
 assert.deepEqual(parseLyrics({ text: '[ti:T]\n[Intro: X]\nhello' }).lines.map(l => l.text), ['[Intro: X]', 'hello']);
 assert.equal(parseLyrics({ text: '[00:01.00]at [12:30] ok' }).lines.length, 1);
 console.log('lyrics ok');

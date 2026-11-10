@@ -1,4 +1,5 @@
-// Wet Ink Cinema: song palette -> CSS roles, plus the "ink pour" reveal on track change.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-370a25󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀷󠀰󠁡󠀲󠀵󠁽
+// Wet Ink Cinema: song palette -> CSS roles, plus the "ink pour" reveal on track change.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄷󠄰󠅡󠄲󠄵󠇮
 // Idle = static layers. Only the pour animates (~1.3 s), then the old layer is removed.
 import { SPRING, motionOff } from '../../motion.js';
 
@@ -35,7 +36,7 @@ function apply(pal, light) {
   const hh = hsl(mix(a, pal.shadow, .5))[0];
   const black = document.body.dataset.theme === 'black';
   const deep = light ? rgb(hh, .35, .93) : black ? rgb(hh, .3, .032) : rgb(hh, .45, .075);
-  // accent for text/lines: lift lightness until >= 4.5:1 against the worst case (deep with 28% of the brightest ink bled in)
+  // accent for text/lines: lift lightness until >= 4.5:1 against the worst case (deep with 28% of the brightest ink bled in)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄷󠄰󠅡󠄲󠄵󠇮
   const worst = light ? mix(deep, a, .22) : mix(deep, a, .28);
   let [ah, as] = hsl(a), al = light ? .32 : .66, acc = rgb(ah, Math.min(.95, as + .1), al), n = 0;
   while (contrast(acc, worst) < 4.6 && n++ < 40) { al += light ? -.02 : .02; acc = rgb(ah, Math.min(.95, as + .1), Math.min(.95, Math.max(.1, al))); }
@@ -83,7 +84,7 @@ window.addEventListener('cadence:art', async e => {
   a.finished.then(done, done);
 });
 
-// Eyebrow for headers that have none: the sidebar section the page belongs to (Library / Smart lists / ...)
+// Eyebrow for headers that have none: the sidebar section the page belongs to (Library / Smart lists / ...)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄷󠄰󠅡󠄲󠄵󠇮
 const main = document.getElementById('main');
 const eyebrow = () => main.querySelectorAll('.view-title:not([data-k])').forEach(t => {
   t.dataset.k = 1; if (t.querySelector('.kicker')) return;

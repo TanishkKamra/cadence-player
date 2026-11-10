@@ -1,4 +1,5 @@
-// Fusion C "Lit Chassis": song palette -> lamp + inks, the Pour, level knob, power-on warm-up, phosphor rings.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-9e3b56󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠁥󠀳󠁢󠀵󠀶󠁽
+// Fusion C "Lit Chassis": song palette -> lamp + inks, the Pour, level knob, power-on warm-up, phosphor rings.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅥󠄳󠅢󠄵󠄶󠇮
 // Idle is still: the only loop is the rings canvas, and only while audio plays AND the window is visible AND Now Playing is open
 // AND Settings > Live visuals is on (capped at one frame per 15.5 ms, i.e. at most 60 fps). Paused = one static paint.
 import { set, engine } from '../../core.js';
@@ -100,7 +101,7 @@ window.addEventListener('cadence:art', e => {
   const a = disc.animate(k0, opt); field.animate(k1, opt);
   a.finished.then(() => { layer.classList.remove('pouring'); layer.style.backgroundImage = fcss; layer.replaceChildren(); done(); }, () => {});
 });
-// a theme switch re-derives the chassis from the same palette (no pour)
+// a theme switch re-derives the chassis from the same palette (no pour)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅥󠄳󠅢󠄵󠄶󠇮
 new MutationObserver(() => {
   if (!cur) return;
   const p = derive(cur, body.dataset.theme); apply(p);
@@ -298,7 +299,7 @@ function mountMini() {
 mountMini();
 boot();
 
-// quantised dot-matrix seek strip (player.js calls P.seekPainter when a design sets it). Columns are 5px, peaks snap to whole dot rows, played dots are the lamp.
+// quantised dot-matrix seek strip (player.js calls P.seekPainter when a design sets it). Columns are 5px, peaks snap to whole dot rows, played dots are the lamp.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠅥󠄳󠅢󠄵󠄶󠇮
 let dc = null; // cached dot layers: A = unplayed look, B = played look (both with ghost dots); per frame = two drawImage + the playhead column
 function drawDots(g, W, H, dpr, peaks, x, k) {
   const lamp = (root.style.getPropertyValue('--lcd') || '255 160 60').trim().split(/\s+/).join(','), key = `${W}|${H}|${lamp}|${peaks?.length}|${peaks?.[0]}|${k.toFixed(2)}`;

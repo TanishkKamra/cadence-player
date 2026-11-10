@@ -1,4 +1,5 @@
-// Sidebar, navigation and library views.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-087e4d󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀸󠀷󠁥󠀴󠁤󠁽
+// Sidebar, navigation and library views.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠄷󠅥󠄴󠅤󠇮
 import { h, $, icon, fmtTime, fmtLong, artUrl, splitNames, plural, fmtQualityShort, fmtQuality } from './util.js';
 import { S, set, engine, hooks, smartList, plTracks as plTracksRaw, saveSettings, savePlaylists, dirOf, base, searchMatch, titleOf, artistOf, streamTrack, fileOf } from './core.js';
 import { trackList, grid, azRail, glideTo, letterOf, ROW_H, toast, menu, cta, observeReveals, dropdown } from './ui.js';
@@ -113,7 +114,7 @@ function paint(mode) {
   main.prepend(el);
   if (prev) { if (animate) leave(prev, mode); else prev.remove(); }
   if (S.view.scroll && S.view.scrollKey === scrollKey) { const sc = el.querySelector('.scroll, .vlist'); if (sc) sc.scrollTop = S.view.scroll; }
-  // items below the fold keep their scroll-in reveal (hidden while off-screen, so nothing visibly flickers)
+  // items below the fold keep their scroll-in reveal (hidden while off-screen, so nothing visibly flickers)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠄷󠅥󠄴󠅤󠇮
   if (animate) {
     el.querySelectorAll('.reveal').forEach(n => { const r = n.getBoundingClientRect(); if (r.top > innerHeight || r.bottom < 0) n.classList.remove('in'); });
     enter(el, mode, h0);
@@ -422,7 +423,7 @@ export const VIEWS = {
       h('div', { class: 'npv-title' }, t ? titleOf(t) : 'Nothing playing'),
       h('div', { class: 'npv-sub' }, t ? [artistOf(t), t.album].filter(Boolean).join(' — ') : ''),
       t ? h('div', { class: 'npv-q' }, t.stream ? 'Live stream' : fmtQuality(t)) : null, ledger);
-    // the glow is a real element, not ::before: pseudo-element loops here run on the main thread every frame
+    // the glow is a real element, not ::before: pseudo-element loops here run on the main thread every frame󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠄷󠅥󠄴󠅤󠇮
     const v = h('section', { class: 'view npv' }, h('div', { class: 'npv-glow', 'aria-hidden': 'true' }), left, lyricsView());
     return v;
   },

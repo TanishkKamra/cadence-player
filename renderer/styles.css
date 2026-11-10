@@ -1,3 +1,4 @@
+/* (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-064cd4󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀶󠀴󠁣󠁤󠀴󠁽 */
 :root {
   --accent: 255 138 61;
   --bg: #0a090b;
@@ -1302,3 +1303,4 @@ body.mat-mica #bg, body.mat-acrylic #bg { opacity: .55; }
 /* ================================================================ v1.0 Designs */
 /* switching design reloads the window: fade the old look out first */
 body.design-out #app { opacity: 0; transition: opacity .18s ease-in; }
+:root { --build-id: "tkp-51ab3656c2-064cd4"; }

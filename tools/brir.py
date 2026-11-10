@@ -1,11 +1,12 @@
-# python tools/brir.py <SADIE II D1.zip> renderer/brir.bin
+# (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-aa02f7󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁡󠁡󠀰󠀲󠁦󠀷󠁽
+# python tools/brir.py <SADIE II D1.zip> renderer/brir.bin󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠅡󠄰󠄲󠅦󠄷󠇮
 # Virtual speakers: the SADIE II KU100 (subject D1) room responses for speakers at +-45 degrees (the nearest BRIR positions to a
 # stereo pair; BRIRs exist every 45 degrees), from the 96 kHz set (SADIE's 44.1 and 48 kHz sets carry far less sub-bass), stored at
 # 44.1, 48 and 96 kHz. SADIE II, University of York, Apache-2.0,
 # https://www.york.ac.uk/sadie-project/database.html, DOI 10.3390/app8112029.
 # One minimum-phase correction is applied to all four responses, so the interaural level and time differences are kept: it
 # flattens the pair's power response (both ears, uncorrelated left and right) in every 1/3-octave band, pink-weighted, so music keeps its tonal
-# balance and loudness and only gains the spatial cues. The common onset delay is trimmed.
+# balance and loudness and only gains the spatial cues. The common onset delay is trimmed.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠅡󠄰󠄲󠅦󠄷󠇮
 # Output: int32 sets, then per set int32 rate, int32 length, float32 LL, LR, RL, RR (speaker -> ear), little-endian.
 import struct, sys, zipfile
 import numpy as np
@@ -85,7 +86,7 @@ for azi in ('45,0', '315,0'):
     r, x = wav(z.read(f'D1/D1_BRIR_WAV/96K_24bit/azi_{azi}_ele_0,0.wav'))
     assert r == 96000 and x.shape[1] == 2
     pair.append([x[:, 0], x[:, 1]])
-# SADIE azimuths run counter-clockwise: the speaker louder at the left ear is the left one
+# SADIE azimuths run counter-clockwise: the speaker louder at the left ear is the left one󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠅡󠄰󠄲󠅦󠄷󠇮
 if (pair[0][0] ** 2).sum() < (pair[0][1] ** 2).sum(): pair.reverse()
 sets = []
 for rate in (44100, 48000, 96000):

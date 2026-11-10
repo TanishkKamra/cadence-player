@@ -1,4 +1,5 @@
-// node test/exclusive.test.mjs — exclusive-output controller against a fake WASAPI helper
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-150670󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀵󠀰󠀶󠀷󠀰󠁽
+// node test/exclusive.test.mjs — exclusive-output controller against a fake WASAPI helper󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄵󠄰󠄶󠄷󠄰󠇮
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { Exclusive } from '../exclusive.mjs';
@@ -81,7 +82,7 @@ assert.equal(out.filter(m => m.type === 'switch' && m.id === 13).length, 0); // 
 proc.stdout.emit('data', 'refuse 13 refused\n');
 assert.equal(last('refused').queued, true);
 
-// nothing to replace it with: queue(null) releases the held 'ended'
+// nothing to replace it with: queue(null) releases the held 'ended'󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄵󠄰󠄶󠄷󠄰󠇮
 xo.open(8, 1000, 24); xo.msg({ type: 'play', id: 8 }); xo.data(8, pcm(100)); xo.end(8);
 xo.open(9, 1000, 24); xo.data(9, pcm(10)); xo.msg({ type: 'queue', id: 9 });
 proc.stdout.emit('data', 'refuse 9 refused\n');
@@ -159,7 +160,7 @@ assert.equal(out.filter(m => m.type === 'refused').length, nRefused);
   proc.stdout.emit('data', 'dsp 0 -inf - 0 0\n');
   assert.equal(o2.filter(m => m.type === 'dsp').at(-1).dacDb, null);
 }
-// a stop then a quick play: the new helper starts only once the old one has exited (it restores the DAC volume on exit)
+// a stop then a quick play: the new helper starts only once the old one has exited (it restores the DAC volume on exit)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄵󠄰󠄶󠄷󠄰󠇮
 {
   let spawns = 0; const o4 = [];
   const x4 = new Exclusive({ spawn: () => { spawns++; return fake(); }, send: m => o4.push(m), ack() {} });

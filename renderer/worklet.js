@@ -1,4 +1,5 @@
-// PCM player: pulls interleaved f32 stereo chunks per stream, does gapless hand-off,
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-08d88d󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀸󠁤󠀸󠀸󠁤󠁽
+// PCM player: pulls interleaved f32 stereo chunks per stream, does gapless hand-off,󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠅤󠄸󠄸󠅤󠇮
 // equal-power crossfades and per-stream gain (ReplayGain). The DSP runs in dsp.js ('cadence-dsp').
 class Stream {
   constructor(id, gain) {
@@ -26,7 +27,7 @@ class CadenceProcessor extends AudioWorkletProcessor {
       case 'end': if (s) s.ended = true; break;
       case 'close':
         // the engine may close a stream the worklet has already promoted (gapless/crossfade in flight):
-        // never cut the audible stream here; 'play'/'stop' replace it explicitly
+        // never cut the audible stream here; 'play'/'stop' replace it explicitly󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠅤󠄸󠄸󠅤󠇮
         if (this.cur === m.id) break;
         this.streams.delete(m.id);
         if (this.next === m.id) { this.next = null; this.xf = null; }
@@ -96,7 +97,7 @@ class CadenceProcessor extends AudioWorkletProcessor {
     if (this.silence > 0) { this.silence -= n; return true; }
     const b = this.next != null ? this.streams.get(this.next) : null;
 
-    // automatic crossfade into the queued track once the current one has <= autoXf frames left
+    // automatic crossfade into the queued track once the current one has <= autoXf frames left󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄸󠅤󠄸󠄸󠅤󠇮
     if (!this.xf && b && this.autoXf && this.nextXf !== false && a.ended && a.buffered <= this.autoXf && b.buffered > 0) {
       this.xf = { pos: 0, len: Math.max(a.buffered, n) };
       this.port.postMessage({ type: 'xfstart', id: b.id, from: a.id });

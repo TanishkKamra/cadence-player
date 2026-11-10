@@ -1,4 +1,5 @@
-// BLACK TITANIUM REFERENCE (metal-b): light model, cover matcap, volume ring, Now Playing instrument.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-4f2b68󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀴󠁦󠀲󠁢󠀶󠀸󠁽
+// BLACK TITANIUM REFERENCE (metal-b): light model, cover matcap, volume ring, Now Playing instrument.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠅦󠄲󠅢󠄶󠄸󠇮
 // Nothing here runs while idle: pointer light is rAF-coalesced and stops with the pointer, the needle meter and the
 // seconds hand only tick while a track plays on the Now Playing view, everything else is event driven.
 import { h, $ } from '../../util.js';
@@ -14,7 +15,7 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <linearGradient id="m-chrome-v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7faff"/><stop offset=".4" stop-color="#9aa5b4"/><stop offset=".49" stop-color="#2a3038"/><stop offset=".52" stop-color="#0f1215"/><stop offset=".7" stop-color="#5d6672"/><stop offset="1" stop-color="#d7dee8"/></linearGradient></defs></svg>`);
 
-// knurling as an anti-aliased SVG (repeating-conic-gradient moires at this size)
+// knurling as an anti-aliased SVG (repeating-conic-gradient moires at this size)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠅦󠄲󠅢󠄶󠄸󠇮
 { const N = 36, pts = []; for (let i = 0; i < N; i++) { const a0 = i * 2 * Math.PI / N, a1 = a0 + Math.PI / N, f = a => `${(50 + 50 * Math.sin(a)).toFixed(2)},${(50 - 50 * Math.cos(a)).toFixed(2)}`; pts.push(`<path d="M50 50L${f(a0)}L${f(a1)}Z"/>`); }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><circle cx="50" cy="50" r="50" fill="#161a1f"/><g fill="#3a424b">${pts.join('')}</g><circle cx="50" cy="50" r="50" fill="none" stroke="#000" stroke-opacity=".5" stroke-width="3"/></svg>`;
   const blobVar = (n, s) => body.style.setProperty(n, `url(${URL.createObjectURL(new Blob([s], { type: 'image/svg+xml' }))})`);
@@ -171,7 +172,7 @@ function enhanceNP() {
   charge(true); startTick();
   rescan();
 }
-// one-off GPU shader warm-up: draw a tiny faint copy of the instrument at idle so the first Now Playing visit pays no compile/raster stall
+// one-off GPU shader warm-up: draw a tiny faint copy of the instrument at idle so the first Now Playing visit pays no compile/raster stall󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠅦󠄲󠅢󠄶󠄸󠇮
 let warmed = false;
 function warm() {
   if (warmed || !motionOk()) return; warmed = true;

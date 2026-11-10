@@ -1,7 +1,8 @@
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-6f0b37󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀶󠁦󠀰󠁢󠀳󠀷󠁽
 import { ICONS as LIGHT } from './icons.js';
 import { ICONS as REGULAR } from './icons-regular.js';
 let P = LIGHT;
-// some designs draw Phosphor Regular instead of Light; set once at startup, before anything is rendered
+// some designs draw Phosphor Regular instead of Light; set once at startup, before anything is rendered󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄶󠅦󠄰󠅢󠄳󠄷󠇮
 export const setIconWeight = w => { P = w === 'regular' ? REGULAR : LIGHT; };
 // DOM helper: text children are always inserted as text nodes (tags/lyrics are untrusted).
 export function h(tag, props, ...kids) {
@@ -51,7 +52,7 @@ export function fmtQuality(t) {
   if (!t.lossless && t.bitrate) parts.push(`${Math.round(t.bitrate / 1000)} kbps`);
   return parts.filter(Boolean).join(' · ');
 }
-// compact list form: "FLAC 24/96", "MP3 320"
+// compact list form: "FLAC 24/96", "MP3 320"󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄶󠅦󠄰󠅢󠄳󠄷󠇮
 export function fmtQualityShort(t) {
   const codec = codecName(t);
   if (t.lossless && t.bits && t.sampleRate) return `${codec} ${t.bits}/${+(t.sampleRate / 1000).toFixed(1)}`;
@@ -71,7 +72,7 @@ export const splitNames = s => {
   return t.split(/\s*(?:,(?! the )|;|\/|&| feat\.? | ft\.? | x )\s*/i).map(x => x.trim().replace(/\0(\d+)\0/g, (_, i) => kept[i])).filter(Boolean);
 };
 
-// Dominant vivid colour of an image, nudged into a readable range for dark UI.
+// Dominant vivid colour of an image, nudged into a readable range for dark UI.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄶󠅦󠄰󠅢󠄳󠄷󠇮
 export function accentFrom(img) {
   const c = document.createElement('canvas');
   c.width = c.height = 40;

@@ -1,3 +1,4 @@
+/* (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-2e14f2󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀲󠁥󠀱󠀴󠁦󠀲󠁽 */
 /* ================================================================ CINEMA PRESS (fusion-a)
    A film still with subtitles, set in a magazine, played on a machine built for it.
    Loaded after cinema.css (Wet Ink: palette, 3-ink pour, plates). This layer adds the magazine voice (display type,
@@ -313,3 +314,4 @@ body.press #player .np-art .ov.r { top: 12px; bottom: auto; }
 body.press[data-theme="light"] #player .np-art::after { display: none; }
 body.press #player .np-art, body.press[data-theme] #player .np-art { -webkit-mask-image: none !important; mask-image: none !important; }
 body.press :is(.npv-title,.chip.title,.view-title h1) .sw { display: inline-block; white-space: nowrap; }
+:root { --build-id: "tkp-51ab3656c2-2e14f2"; }

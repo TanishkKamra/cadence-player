@@ -1,4 +1,5 @@
-// Editorial Kinetic Type: lyric lines as typography that swells word by word in sync with the song.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-7080a4󠁻󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀷󠀰󠀸󠀰󠁡󠀴󠁽
+// Editorial Kinetic Type: lyric lines as typography that swells word by word in sync with the song.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄰󠄸󠄰󠅡󠄴󠇮
 // - every word is a fixed-width box (measured at the heaviest weight) so a weight morph never re-wraps the paragraph
 // - the active line animates the variable font's wght axis per word (--p 0..1), lifts, and takes the song's spot colour
 // - GSAP SplitText sets the active line's glyphs rising into place on entry (created on entry, reverted on exit: never 1000s of spans)
@@ -7,7 +8,7 @@ import { motionOff } from '../motion.js';
 
 const W_MIN = 500, W_MAX = 860;
 // widths come from the real DOM at the heaviest weight (a canvas guess mis-sizes fallback-script glyphs): one forced layout for the whole page of lyrics
-// deferred to idle: a view/track transition never waits on this forced layout (one read pass, then one write pass)
+// deferred to idle: a view/track transition never waits on this forced layout (one read pass, then one write pass)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄰󠄸󠄰󠅡󠄴󠇮
 export function fit(scroll) {
   const run = () => { if (scroll.isConnected) measure(scroll); };
   if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1200 }); else setTimeout(run, 400);
@@ -93,7 +94,7 @@ export function frame(el, pos) {
     if (w._sung !== sung) { w._sung = sung; w.classList.toggle('sung', sung); }
   });
 }
-// neighbours fade by distance, so the eye reads the line stack as a depth ramp
+// neighbours fade by distance, so the eye reads the line stack as a depth ramp󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄷󠄰󠄸󠄰󠅡󠄴󠇮
 export function ramp(els, i, prev) {
   const set = (k, c) => els[k]?.classList.add(c);
   const clear = k => els[k]?.classList.remove('d1', 'd2', 'd3', 'pa');
