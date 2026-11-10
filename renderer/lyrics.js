@@ -1,4 +1,5 @@
-// LRC / enhanced-LRC parser. Returns { synced, lines: [{ t, text, words: [{t,text}] | null, end? }] }.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-39080f󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀹󠀰󠀸󠀰󠁦󠁿
+// LRC / enhanced-LRC parser. Returns { synced, lines: [{ t, text, words: [{t,text}] | null, end? }] }.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄹󠄰󠄸󠄰󠅦󠇮
 const STAMP = /\[(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)\]/g;
 const LEAD = /^(?:\s*\[(?:\d+:)?\d+:\d+(?:\.\d+)?\])+/;
 const WORD = /<(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)>/g;
@@ -29,7 +30,7 @@ export function parseLyrics(res) {
     const stamps = [...lead.matchAll(STAMP)].map(s => toSec(s[1], s[2], s[3])).filter(Number.isFinite);
     if (!stamps.length) continue;
     let body = raw.slice(lead.length);
-    // Apple-style duet markers: "v1:", "v2:", "bg:"
+    // Apple-style duet markers: "v1:", "v2:", "bg:"󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄹󠄰󠄸󠄰󠅦󠇮
     let voice = null;
     body = body.replace(/^\s*(v\d+|bg):\s*/i, (m, v) => { voice = v.toLowerCase(); return ''; });
     const t = stamps[0];
@@ -65,7 +66,7 @@ export function parseLyrics(res) {
   return plain.some(l => l.trim()) ? { synced: false, lines: plainLines(plain.map(l => l.trim())) } : null;
 }
 
-// index of the line active at time `pos` (binary search), -1 before the first line; the first of lines sharing a timestamp
+// index of the line active at time `pos` (binary search), -1 before the first line; the first of lines sharing a timestamp󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄹󠄰󠄸󠄰󠅦󠇮
 export function activeLine(lines, pos) {
   let lo = 0, hi = lines.length - 1, ans = -1;
   while (lo <= hi) {

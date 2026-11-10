@@ -1,4 +1,5 @@
-// Reusable widgets: menus, dialogs, toasts, sliders, knobs, the virtual track list and card grids.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-45a107󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀴󠀵󠁡󠀱󠀰󠀷󠁿
+// Reusable widgets: menus, dialogs, toasts, sliders, knobs, the virtual track list and card grids.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠄵󠅡󠄱󠄰󠄷󠇮
 import { h, $, icon, fmtTime, fmtQuality, fmtQualityShort, isHiRes, artUrl, norm } from './util.js';
 import { S, set, engine, rating, titleOf, artistOf, plTracks } from './core.js';
 import { onTeardown, heroFrom } from './views.js';
@@ -152,7 +153,7 @@ const io = new IntersectionObserver(entries => {
 }, { rootMargin: '0px 0px -6% 0px' });
 // call after inserting content that contains .reveal elements (views.render does this for every view)
 export const observeReveals = root => root.querySelectorAll('.reveal:not(.in)').forEach(n => io.observe(n));
-// pill CTA with the icon nested in its own circle (button-in-button)
+// pill CTA with the icon nested in its own circle (button-in-button)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠄵󠅡󠄱󠄰󠄷󠇮
 export const cta = (label, ic, onclick, kind = '') => h('button', { class: 'cta ' + kind, onclick }, h('span', {}, label), h('span', { class: 'cta-ic' }, icon(ic)));
 
 export function closeMenus() { document.querySelectorAll('.menu').forEach(m => m.remove()); }
@@ -463,7 +464,7 @@ export function grid(items, { round = false, sub = () => '', open, play, menu: o
         it.art ? h('img', { src: artUrl(it.art), loading: 'lazy', decoding: 'async', alt: '' }) : h('div', { class: 'ph' }, icon(ph)),
         h('span', { class: 'play-fab', title: 'Play', role: 'button', onclick: e => { e.stopPropagation(); play(it); } }, icon('play'))),
       h('div', { class: 't1', title: it.name }, it.name), h('div', { class: 't2' }, sub(it)));
-  // first screenful now; the rest streams in during idle time, so a page of hundreds of covers opens within one frame
+  // first screenful now; the rest streams in during idle time, so a page of hundreds of covers opens within one frame󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄴󠄵󠅡󠄱󠄰󠄷󠇮
   const FIRST = 36;
   const box = h('div', { class: asList ? 'cat-list' : 'grid' }, ...items.slice(0, FIRST).map(row));
   let i = FIRST;

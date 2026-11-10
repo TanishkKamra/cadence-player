@@ -1,3 +1,4 @@
+/* (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-d0af51󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁤󠀰󠁡󠁦󠀵󠀱󠁿 */
 /* ============================================================================================
    BLACK TITANIUM REFERENCE  -  metal-b theme layer
    PVD black titanium, black glass, polished chrome, one brass accent. Song colour = LED / backlit
@@ -517,3 +518,4 @@ body.mt[data-theme="light"] .m-snail .t { color: var(--led); text-shadow: 0 0 10
 body.mt .m-stage { contain: layout paint style; }
 body.mt .m-idx i { will-change: auto; }
 body.mt .m-idx.chg i::after { will-change: opacity; } /* tiny layers, only while the power-on sweep runs */
+:root { --build-id: "tkp-51ab3656c2-d0af51"; }

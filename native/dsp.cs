@@ -1,3 +1,4 @@
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-3c278e󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠁣󠀲󠀷󠀸󠁥󠁿
 // 64-bit (double) DSP for exclusive output: the same chain as the Web Audio graph in renderer/engine.js, in the same order:
 // stream gain (ReplayGain) -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> volume -> reverb -> virtual speakers -> limiter.
 // The filters are linear, so they run as two chains: every cut first, then every boost, each boost kept as its own part for the

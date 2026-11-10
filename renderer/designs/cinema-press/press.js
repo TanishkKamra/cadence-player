@@ -1,4 +1,5 @@
-// Cinema Press: the glue. (1) Now Playing title is fitted so its longest word always fits the column at display size.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-110b38󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀱󠀰󠁢󠀳󠀸󠁿
+// Cinema Press: the glue. (1) Now Playing title is fitted so its longest word always fits the column at display size.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄱󠄰󠅢󠄳󠄸󠇮
 // (2) On every track change the titles rise letter by letter (GSAP SplitText, reverted when done: no span soup left behind).
 // Everything is event driven (mutation observers); no timers, no rAF loops while idle.
 import { motionOff } from '../../motion.js';
@@ -7,7 +8,7 @@ const main = document.getElementById('main'), player = document.getElementById('
 const G = () => window.gsap && window.SplitText;
 if (G()) gsap.registerPlugin(SplitText);
 
-// ---- fit the Now Playing title ----
+// ---- fit the Now Playing title ----󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄱󠄰󠅢󠄳󠄸󠇮
 let lastW = 0;
 function fitTitle(t) {
   const w = t.parentElement.clientWidth;
@@ -30,7 +31,7 @@ function rise(el, delay = 0) {
   let sp;
   try { sp = SplitText.create(el, { type: 'words,chars', charsClass: 'ch', wordsClass: 'sw' }); } catch { return; }
   const dur = document.body.classList.contains('anim-fast') ? .6 : 1;
-  // WAAPI (compositor) instead of gsap: gsap rewrote inline styles on every glyph every frame (style recalc + text relayout)
+  // WAAPI (compositor) instead of gsap: gsap rewrote inline styles on every glyph every frame (style recalc + text relayout)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠄱󠄰󠅢󠄳󠄸󠇮
   const ease = 'cubic-bezier(.16,1,.3,1)';
   const an = sp.chars.map((c, k) => c.animate([{ transform: 'translateY(55%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900 * dur, delay: delay * 1000 + k * 22 * dur, easing: ease, fill: 'backwards' }));
   Promise.all(an.map(a => a.finished)).then(() => { if (sp.chars[0]?.isConnected) sp.revert(); }, () => {});

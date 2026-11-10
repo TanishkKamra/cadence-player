@@ -1,4 +1,5 @@
-// Synced / word-level lyrics view.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-a21461󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁡󠀲󠀱󠀴󠀶󠀱󠁿
+// Synced / word-level lyrics view.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠄲󠄱󠄴󠄶󠄱󠇮
 import { h, icon, fmtTime, artUrl, signed, fmtQuality } from './util.js';
 import { S, set, engine, saveSettings, titleOf, artistOf } from './core.js';
 import { parseLyrics, activeLine } from './lyrics.js';
@@ -34,7 +35,7 @@ export function lyricsView() {
   v.append(head, scroll);
   let lines = [], lineEls = [], active = -2, userScrollAt = 0, track = null, raf, tm, synced = false;
   scroll.addEventListener('wheel', () => { userScrollAt = performance.now(); }, { passive: true });
-  // no lyrics column worth showing: Now Playing centres the cover (the state holds until the next song's lyrics are known)
+  // no lyrics column worth showing: Now Playing centres the cover (the state holds until the next song's lyrics are known)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠄲󠄱󠄴󠄶󠄱󠇮
   const setSparse = on => {
     if (v.classList.contains('ly-sparse') === on) return;
     const art = v.parentElement?.querySelector('.npv-art'), from = art?.getBoundingClientRect();
@@ -113,7 +114,7 @@ export function lyricsView() {
     if (K) { if (lineEls[i]) kin.frame(lineEls[i], pos); }
     else if (l?.words) lineEls[i].querySelectorAll('.w').forEach((w, k) => {
       const wt = l.words[k], nt = l.words[k + 1]?.t ?? l.end ?? Math.min(lines[i + 1]?.t ?? Infinity, wt.t + lastWordLen(l));
-      // fill each word progressively across its duration
+      // fill each word progressively across its duration󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅡󠄲󠄱󠄴󠄶󠄱󠇮
       w.style.setProperty('--fill', Math.max(0, Math.min(1, (pos - wt.t) / Math.max(0.05, nt - wt.t))) * 100 + '%');
       w.classList.toggle('sung', wt.t <= pos);
     });

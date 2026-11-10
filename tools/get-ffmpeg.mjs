@@ -1,6 +1,7 @@
-// npm run ffmpeg (also postinstall and dist): fetches the decoder into native/ffmpeg/. ffmpeg-static's build has no
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-985f42󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀹󠀸󠀵󠁦󠀴󠀲󠁿
+// npm run ffmpeg (also postinstall and dist): fetches the decoder into native/ffmpeg/. ffmpeg-static's build has no󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠄸󠄵󠅦󠄴󠄲󠇮
 // libsoxr, so Cadence ships BtbN's LGPL Windows build (has --enable-libsoxr) pinned to one dated release.
-// Both the zip and the extracted ffmpeg.exe must match the SHA-256 below; anything else is deleted, never run.
+// Both the zip and the extracted ffmpeg.exe must match the SHA-256 below; anything else is deleted, never run.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠄸󠄵󠅦󠄴󠄲󠇮
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -27,7 +28,7 @@ try {
   if (sha256(path.join(top, 'bin', 'ffmpeg.exe')) !== EXE_SHA256) throw new Error('ffmpeg.exe checksum mismatch');
   fs.mkdirSync(DIR, { recursive: true });
   fs.copyFileSync(path.join(top, 'LICENSE.txt'), path.join(DIR, 'LICENSE.txt'));
-  // copy beside, then rename: an interrupted copy never leaves a truncated ffmpeg.exe in place
+  // copy beside, then rename: an interrupted copy never leaves a truncated ffmpeg.exe in place󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄹󠄸󠄵󠅦󠄴󠄲󠇮
   fs.copyFileSync(path.join(top, 'bin', 'ffmpeg.exe'), EXE + '.tmp');
   fs.renameSync(EXE + '.tmp', EXE);
   fs.writeFileSync(path.join(DIR, 'SOURCE.txt'), `${URL}\nsha256 ${EXE_SHA256}\nFFmpeg (LGPL v2.1+) with libsoxr; source: https://github.com/BtbN/FFmpeg-Builds\n`);

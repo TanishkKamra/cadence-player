@@ -1,4 +1,5 @@
-// Audio engine: ffmpeg (main process) -> worklet PCM player -> 64-bit DSP worklet (dsp.js, the same code as the exclusive
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e462d3󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀴󠀶󠀲󠁤󠀳󠁿
+// Audio engine: ffmpeg (main process) -> worklet PCM player -> 64-bit DSP worklet (dsp.js, the same code as the exclusive󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄴󠄶󠄲󠅤󠄳󠇮
 // helper's native/dsp.cs) -> output device.
 import { biquadCoef, biquadDb, brirFor } from './dsp.js';
 
@@ -202,7 +203,7 @@ export class Engine extends EventTarget {
     }
     else if (m.type === 'fail') this.emit('xofail', m);
     else if (m.type === 'refused') {
-      // the device refused one rate: resample to another it may take, give up once every rate was refused
+      // the device refused one rate: resample to another it may take, give up once every rate was refused󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄴󠄶󠄲󠅤󠄳󠇮
       const s = this.streams.get(m.id);
       if (!s) return; // stale refusal for a stream that is gone
       (this.xoRefused ||= new Set()).add(s.rate);
@@ -486,7 +487,7 @@ export class Engine extends EventTarget {
   get entry() { return this.cur?.entry || null; }
 
   // combined magnitude response (dB) of the EQ bands and tone shelves, for drawing the EQ curve: the DSP's own coefficients,
-  // from the target values, so the curve tracks the sliders exactly. Preamp is a separate flat gain stage.
+  // from the target values, so the curve tracks the sliders exactly. Preamp is a separate flat gain stage.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄴󠄶󠄲󠅤󠄳󠇮
   response(freqs) {
     const total = new Float32Array(freqs.length), fs = this.ctx.sampleRate, n = (v, d) => (Number.isFinite(+v) ? +v : d);
     const nodes = [];

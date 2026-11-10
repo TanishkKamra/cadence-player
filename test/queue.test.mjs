@@ -1,4 +1,5 @@
-// node test/queue.test.mjs — queue: user Queue plays first, then the list continues
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1c4db7󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠁣󠀴󠁤󠁢󠀷󠁿
+// node test/queue.test.mjs — queue: user Queue plays first, then the list continues󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅣󠄴󠅤󠅢󠄷󠇮
 import assert from 'node:assert/strict';
 import { S, set, setList, enqueue, peekNext, commit, prevEntry, setShuffle, removeFromList, allowXf } from '../renderer/core.js';
 
@@ -27,7 +28,7 @@ S.repeat = 'all'; assert.equal(peekNext(nc).track, a);
 S.repeat = 'one'; assert.equal(peekNext(nc), nc);
 S.repeat = 'off';
 
-// shuffle keeps the playing entry first and restores order when turned off
+// shuffle keeps the playing entry first and restores order when turned off󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅣󠄴󠅤󠅢󠄷󠇮
 setShuffle(true);
 assert.equal(S.list[S.li], nc);
 assert.equal(S.list.length, 3);
@@ -47,7 +48,7 @@ assert.equal(allowXf({ track: b }, { track: c }), true);
 set.xfMode = 'none';
 console.log('queue ok');
 
-// bad saved data is clamped, not trusted
+// bad saved data is clamped, not trusted󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄱󠅣󠄴󠅤󠅢󠄷󠇮
 import { cleanSettings, cleanPlaylists, cleanStats, DEFAULTS } from '../renderer/core.js';
 const bad = cleanSettings(JSON.parse('{"volume":9,"theme":"x","graphic":"no","params":[1],"userPresets":{"__proto__":{"a":1},"ok":{}},"reverb":"old","bass":null}'));
 assert.equal(bad.volume, 1); assert.equal(bad.theme, DEFAULTS.theme); assert.equal(bad.graphic.length, 10); assert.equal(bad.bass, 0);

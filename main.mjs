@@ -1,3 +1,4 @@
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-000aaf󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀰󠀰󠁡󠁡󠁦󠁿
 import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, net, protocol, Notification, powerSaveBlocker, screen } from 'electron';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import { parseFile } from 'music-metadata';
 import { Exclusive } from './exclusive.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-// libsoxr-capable build fetched by tools/get-ffmpeg.mjs (ffmpeg-static has no soxr)
+// libsoxr-capable build fetched by tools/get-ffmpeg.mjs (ffmpeg-static has no soxr)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄰󠄰󠅡󠅡󠅦󠇮
 const FFMPEG = path.join(ROOT, 'native', 'ffmpeg', 'ffmpeg.exe').replace('app.asar', 'app.asar.unpacked');
 const WASAPI = path.join(ROOT, 'native', 'cadence-wasapi.exe').replace('app.asar', 'app.asar.unpacked');
 const DATA = app.getPath('userData');
@@ -590,7 +591,7 @@ ipcMain.handle('import:phone', () => {
   return data || settings ? { data, settings } : null;
 });
 
-// ---------- playlists (m3u8) ----------
+// ---------- playlists (m3u8) ----------󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄰󠄰󠅡󠅡󠅦󠇮
 const plEntry = (dir, l) => {
   if (isUrl(l)) return l;
   let f;
@@ -1058,7 +1059,7 @@ ipcMain.handle('scrobble:listenbrainz', async (e, token, type, t, listenedAt) =>
   return r.ok;
 });
 
-// ---------- artist images (Deezer public search API, no key) ----------
+// ---------- artist images (Deezer public search API, no key) ----------󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄰󠄰󠅡󠅡󠅦󠇮
 ipcMain.handle('art:artists', async (e, names, force) => {
   if (!strs(names)) return library.artists;
   let changed = 0;

@@ -1,4 +1,5 @@
-// Equalizer screen: Equalizer / Tone & Volume / Reverb tabs.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-baf7e7󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁢󠁡󠁦󠀷󠁥󠀷󠁿
+// Equalizer screen: Equalizer / Tone & Volume / Reverb tabs.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅡󠅦󠄷󠅥󠄷󠇮
 import { h, icon, debounce, signed } from './util.js';
 import { S, set, engine, saveSettings } from './core.js';
 import { REVERBS, REVERB_PARAMS } from './engine.js';
@@ -202,7 +203,7 @@ function eqTab(content) {
     g.drawImage(st, 0, 0);
     curve.map = { fx, dy, W, H, lo, hi, dbMax, dpr };
   }
-  // drag parametric points: x = frequency, y = gain, wheel = Q; double-click adds a band
+  // drag parametric points: x = frequency, y = gain, wheel = Q; double-click adds a band󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅡󠅦󠄷󠅥󠄷󠇮
   const hitBand = (e, r) => {
     const m = curve.map, b = curve.getBoundingClientRect();
     const px = (e.clientX - b.left) * m.dpr, py = (e.clientY - b.top) * m.dpr;
@@ -416,7 +417,7 @@ async function autoEqDialog() {
     list.replaceChildren(...(hits.length ? hits.map(x =>h('button', { class: 'aeq-row', onclick: async () => {
       try {
         const p = await api.invoke('autoeq:get', x), name = `AutoEq: ${x.name}${tilt.b || tilt.t ? ` (bass ${tilt.b}, treble ${tilt.t})` : ''}`;
-        // AutoEq's own taste knobs: a 105 Hz low shelf and a 10 kHz high shelf on top of the correction (boosts are the limiter's)
+        // AutoEq's own taste knobs: a 105 Hz low shelf and a 10 kHz high shelf on top of the correction (boosts are the limiter's)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅢󠅡󠅦󠄷󠅥󠄷󠇮
         const params = [...p.bands, ...(tilt.b ? [{ type: 'lowshelf', freq: 105, gain: tilt.b, q: 0.7 }] : []), ...(tilt.t ? [{ type: 'highshelf', freq: 10000, gain: tilt.t, q: 0.7 }] : [])];
         loadPreset(name, { mode: 'parametric', params, preamp: p.preamp });
         set.userPresets[name] = { mode: 'parametric', params, preamp: p.preamp };

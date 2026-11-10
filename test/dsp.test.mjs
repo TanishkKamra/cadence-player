@@ -1,4 +1,5 @@
-// node test/dsp.test.mjs — renderer/dsp.js (shared output) against native/dsp.cs (exclusive output), and the worklet around it.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-0dd0c7󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠁤󠁤󠀰󠁣󠀷󠁿
+// node test/dsp.test.mjs — renderer/dsp.js (shared output) against native/dsp.cs (exclusive output), and the worklet around it.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠅤󠅤󠄰󠅣󠄷󠇮
 // Needs native/cadence-wasapi.exe (npm run build:native).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,7 +24,7 @@ function signal(rate, sec) {
   return x;
 }
 const brirs = {}, brir = rate => brirs[rate] ??= brirFor(fs.readFileSync(new URL('../renderer/brir.bin', import.meta.url)), rate);
-// the same script as the native --process mode: [frame, 'cfg' | 'vol', value]
+// the same script as the native --process mode: [frame, 'cfg' | 'vol', value]󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠅤󠅤󠄰󠅣󠄷󠇮
 function runJs(rate, steps, x, chunk) {
   const d = new Dsp(rate), y = Float64Array.from(x), seg = new Float64Array(2 * chunk), frames = y.length / 2;
   let si = 0;
@@ -73,7 +74,7 @@ for (const rate of [44100, 48000, 88200]) {
   }
 }
 
-// the AudioWorklet wrapper: Float32 in and out, neutral path bit-exact, tap output carries the post-EQ signal
+// the AudioWorklet wrapper: Float32 in and out, neutral path bit-exact, tap output carries the post-EQ signal󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠅤󠅤󠄰󠅣󠄷󠇮
 {
   const procs = {}, SR = 48000;
   globalThis.sampleRate = SR;

@@ -1,4 +1,5 @@
-// Shared state, settings, persistence, library index and the play queue.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-6c4b65󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀶󠁣󠀴󠁢󠀶󠀵󠁿
+// Shared state, settings, persistence, library index and the play queue.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄶󠅣󠄴󠅢󠄶󠄵󠇮
 import { DESIGNS } from './designs/index.js';
 import { debounce, shuffleArr, splitNames, norm } from './util.js';
 
@@ -73,7 +74,7 @@ function coerce(v, d, key) {
   }
   return v;
 }
-// settings from disk or a backup: every key typed and clamped like DEFAULTS, unknown keys kept (minus prototype keys)
+// settings from disk or a backup: every key typed and clamped like DEFAULTS, unknown keys kept (minus prototype keys)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄶󠅣󠄴󠅢󠄶󠄵󠇮
 export function cleanSettings(raw) {
   raw = isObj(raw) ? raw : {};
   const out = coerce(raw, DEFAULTS);
@@ -323,7 +324,7 @@ export function moveInList(from, to) {
   S.li = S.list.indexOf(cur);
   engine?.invalidateNext();
 }
-// crossfade policy per transition (no fading / non-gapless only / all songs / shuffled songs)
+// crossfade policy per transition (no fading / non-gapless only / all songs / shuffled songs)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄶󠅣󠄴󠅢󠄶󠄵󠇮
 export function allowXf(a, b) {
   switch (set.xfMode) {
     case 'all': return true;

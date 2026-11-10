@@ -1,4 +1,5 @@
-// Phosphor Regular icons (used by the Cinema Press and Two-Ink designs) (MIT, phosphoricons.com), 256-unit grid. Generated from @phosphor-icons/core; do not edit by hand.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-c2bf59󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁣󠀲󠁢󠁦󠀵󠀹󠁿
+// Phosphor Regular icons (used by the Cinema Press and Two-Ink designs) (MIT, phosphoricons.com), 256-unit grid. Generated from @phosphor-icons/core; do not edit by hand.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅣󠄲󠅢󠅦󠄵󠄹󠇮
 export const ICONS = {
  "play": "M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z",
  "pause": "M200,32H160a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H160V48h40ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Zm0,176H56V48H96Z",

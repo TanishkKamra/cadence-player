@@ -1,4 +1,5 @@
-// 64-bit DSP for shared (Web Audio) output: a line-for-line port of native/dsp.cs, so both outputs sound the same.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-09ee3b󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀰󠀹󠁥󠁥󠀳󠁢󠁿
+// 64-bit DSP for shared (Web Audio) output: a line-for-line port of native/dsp.cs, so both outputs sound the same.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄹󠅥󠅥󠄳󠅢󠇮
 // Keep the two in sync: test/dsp.test.mjs checks they agree to 1e-9. Loaded as an AudioWorklet module ('cadence-dsp')
 // and imported by the tests.
 // stream gain -> width/mono -> crossfeed -> preamp -> EQ bands -> bass -> treble -> balance -> reverb -> virtual speakers -> volume -> limiter.
@@ -313,7 +314,7 @@ const KER = kernel(H, 9, KOFF), KERS = kernel(HS, 8, KOFFS);
 // no kernel output can exceed KS times the largest sample in its window (+ the estimate bias)
 const KS = Math.max(...KER.map(w => w.reduce((s, v) => s + Math.abs(v), 0))) * 1.0035;
 
-// Rings here are per channel and mirrored (each sample written at i and i + R), so every kernel window is contiguous: the same
+// Rings here are per channel and mirrored (each sample written at i and i + R), so every kernel window is contiguous: the same󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄹󠅥󠅥󠄳󠅢󠇮
 // sums in the same order as native/dsp.cs, without wrapping each index. `& M` is exact for any integer below 2^53.
 class Limiter {
   constructor(rate, slots) {
@@ -728,7 +729,7 @@ class Fft {
 }
 
 // AudioWorklet: input = the player's stereo output; output 0 = processed, output 1 = post-EQ copy for visualizers.
-// Messages: { dsp: text } (DspConfig format above), { volume: gain }, { reset: true }, { brir: brirFor(...) }. Posts { latency } when it changes.
+// Messages: { dsp: text } (DspConfig format above), { volume: gain }, { reset: true }, { brir: brirFor(...) }. Posts { latency } when it changes.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄰󠄹󠅥󠅥󠄳󠅢󠇮
 if (typeof registerProcessor === 'function') {
   registerProcessor('cadence-dsp', class extends AudioWorkletProcessor {
     constructor() {

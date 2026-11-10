@@ -1,3 +1,4 @@
+/* (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-67f042󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀶󠀷󠁦󠀰󠀴󠀲󠁿 */
 /* ==========================================================================================
    ALU ATELIER (metal-a): bead-blasted anodised aluminium, diamond-cut chamfers.
    Theme layer over styles.css. Everything scoped under body.mt. See spec.md.
@@ -535,3 +536,4 @@ body.mt .fx-card .vslider::-webkit-slider-runnable-track, body.mt .pband .range:
 body.mt .knob .k-lbl, body.mt .eq-band .lbl { color: var(--text); text-shadow: 0 1px 0 rgb(0 0 0 / .45); }
 body.mt .knob .k-val, body.mt .eq-band .val { color: var(--text); text-shadow: 0 1px 0 rgb(0 0 0 / .45); }
 body.mt[data-theme="light"] :is(.knob .k-lbl, .knob .k-val, .eq-band .lbl, .eq-band .val) { text-shadow: 0 1px 0 rgb(255 255 255 / .8); }
+:root { --build-id: "tkp-51ab3656c2-67f042"; }

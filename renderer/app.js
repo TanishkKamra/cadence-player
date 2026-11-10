@@ -1,4 +1,5 @@
-// Boot, theming, OS integration, keyboard, phone import, backup.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-31047f󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠀱󠀰󠀴󠀷󠁦󠁿
+// Boot, theming, OS integration, keyboard, phone import, backup.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄱󠄰󠄴󠄷󠅦󠇮
 import { Engine } from './engine.js';
 import { h, $, icon, PATHS, debounce, fmtTime, setIconWeight } from './util.js';
 import { applyDesignStyles, startDesign } from './designs/index.js';
@@ -333,7 +334,7 @@ addEventListener('keydown', e => {
   else if (e.key === 'F11') api.send('win:fullscreen');
 });
 addEventListener('mouseup', e => { if (e.button === 3) back(); });
-// a slider left focused after a drag would keep Space and the arrows to itself
+// a slider left focused after a drag would keep Space and the arrows to itself󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄱󠄰󠄴󠄷󠅦󠇮
 addEventListener('pointerup', e => { if (e.target.matches?.('input[type=range]')) setTimeout(() => e.target.blur(), 0); });
 
 // ---------- boot ----------
@@ -551,7 +552,7 @@ async function boot() {
     flushAll();
   });
 }
-// artist photos are fetched in small batches in the background
+// artist photos are fetched in small batches in the background󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠄱󠄰󠄴󠄷󠅦󠇮
 let fetchingArtists = false;
 export async function fetchArtistImages() {
   if (!set.artistImages || fetchingArtists) return;

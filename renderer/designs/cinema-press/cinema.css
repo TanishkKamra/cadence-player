@@ -1,3 +1,4 @@
+/* (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-1646d1󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀱󠀶󠀴󠀶󠁤󠀱󠁿 */
 /* ================================================================ Wet Ink Cinema (Beta form layer)
    Soul: the cover is the film still, the song is the light. Everything else is a subtitle plate on it.
    Roles (set per song by wetink.js): --ink-a/b/c (3 inks), --deep (film base, L<=~11%), --accent (AA-lifted ink).
@@ -176,3 +177,4 @@ body.wi #player .np-art { position: relative; z-index: 0; }
 body.wi #player .chips { position: relative; z-index: 3; }
 body.wi .scrim { backdrop-filter: none; background: rgb(var(--deep) / .72); }
 body.wi[data-theme="light"] .npv-title { margin-top: 8px; } body.wi[data-theme="light"] .npv-art { height: 80%; }
+:root { --build-id: "tkp-51ab3656c2-1646d1"; }

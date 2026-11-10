@@ -1,4 +1,5 @@
-// Exclusive (bit-perfect) output: ffmpeg s32le at the source rate -> native/cadence-wasapi.exe, which owns the
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-e23873󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠀲󠀳󠀸󠀷󠀳󠁿
+// Exclusive (bit-perfect) output: ffmpeg s32le at the source rate -> native/cadence-wasapi.exe, which owns the󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄲󠄳󠄸󠄷󠄳󠇮
 // device in WASAPI exclusive mode. Speaks the worklet's message protocol, so renderer/engine.js drives both alike:
 // in 'open' 'gain' 'close' 'stop' 'play' 'queue' 'playing' 'volume' 'dsp' 'config';
 // out 'pos' 'switch' 'ended' 'format' 'refused' 'fail' 'dsp' (64-bit DSP / DAC volume state) 'uvol' (DAC volume changed outside).
@@ -51,7 +52,7 @@ export class Exclusive {
         const s = this.streams.get(m.id);
         if (!s) break;
         // the previous helper is still handing the DAC volume back: start after it is gone, or the new one would read
-        // that hand-back as the user turning the volume (and move the slider)
+        // that hand-back as the user turning the volume (and move the slider)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄲󠄳󠄸󠄷󠄳󠇮
         if (this.dying) { this.deferred = m; break; }
         if (!this.ensureHelper()) break;
         this.write('X', ++this.epoch);
@@ -200,7 +201,7 @@ export class Exclusive {
       if (this.audible) this.send({ type: 'switch', id: g.s.id, from: this.audible.id });
       this.audible = g.s;
     }
-    // the renderer extrapolates between updates; ~4 per second is plenty (switch/ended below still run every line)
+    // the renderer extrapolates between updates; ~4 per second is plenty (switch/ended below still run every line)󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠄲󠄳󠄸󠄷󠄳󠇮
     if (this.audible !== this.lastPosStream || Math.abs(P - this.lastPosFrames) >= g.s.rate / 4) {
       this.lastPosStream = this.audible; this.lastPosFrames = P;
       this.send({ type: 'pos', id: g.s.id, frames: Math.min(P - g.start, g.len) });

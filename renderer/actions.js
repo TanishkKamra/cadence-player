@@ -1,4 +1,5 @@
-// User actions: playing, queueing, rating, playlists, tags, album art, bookmarks, deleting.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-ec5838󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠁥󠁣󠀵󠀸󠀳󠀸󠁿
+// User actions: playing, queueing, rating, playlists, tags, album art, bookmarks, deleting.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠅣󠄵󠄸󠄳󠄸󠇮
 import { h, icon, fmtTime, fmtQuality, splitNames, plural } from './util.js';
 import {
   S, set, engine, hooks, stat, liked, rating, saveStats, savePlaylists, saveBookmarks, saveStreams, setList, setShuffle as coreShuffle,
@@ -134,7 +135,7 @@ export function trackMenu(e, tracks, { playlist, rows, index, list, ctx } = {}) 
   ]);
 }
 
-// ---------- playlists ----------
+// ---------- playlists ----------󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠅣󠄵󠄸󠄳󠄸󠇮
 export async function newPlaylist(tracks = []) {
   const name = await prompt('New playlist', tracks.length === 1 ? tracks[0].album || '' : '', 'Playlist name');
   if (!name) return;
@@ -269,7 +270,7 @@ export function openBookmark(b) {
   hooks.queueChanged();
 }
 
-// ---------- streams ----------
+// ---------- streams ----------󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠅥󠅣󠄵󠄸󠄳󠄸󠇮
 export async function addStream() {
   const url = h('input', { type: 'text', placeholder: 'https://… (stream URL, .m3u or .pls)' });
   const name = h('input', { type: 'text', placeholder: 'Name (optional)' });

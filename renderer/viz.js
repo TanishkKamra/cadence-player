@@ -1,4 +1,5 @@
-// Visualizer: Milkdrop presets (butterchurn, WebGL) or rounded spectrum bars, rendered into any canvas.
+// (c) 2026 Tanishk Kamra | All rights reserved | github.com/TanishkKamra/cadence-player | tkp-51ab3656c2-3aa654󠀁󠁴󠁫󠁰󠀭󠀵󠀱󠁡󠁢󠀳󠀶󠀵󠀶󠁣󠀲󠀭󠀳󠁡󠁡󠀶󠀵󠀴󠁿
+// Visualizer: Milkdrop presets (butterchurn, WebGL) or rounded spectrum bars, rendered into any canvas.󠇯󠅴󠅫󠅰󠄭󠄵󠄱󠅡󠅢󠄳󠄶󠄵󠄶󠅣󠄲󠄭󠄳󠅡󠅡󠄶󠄵󠄴󠇮
 let libs;
 function loadScript(src) {
   return new Promise((res, rej) => {
